@@ -2,6 +2,29 @@
  * Panel ChatAgentHost — pi-durable + pi-ai, isolated from CLI pi sessions.
  * Storage: JSONL under Tick userData (Node 20 has no node:sqlite).
  */
+
+/** Electron 33 ships Node 20 — pi-durable needs Promise.withResolvers (Node 22+). */
+{
+  const P = Promise as unknown as {
+    withResolvers?: <T>() => {
+      promise: Promise<T>;
+      resolve: (v: T | PromiseLike<T>) => void;
+      reject: (e?: unknown) => void;
+    };
+  };
+  if (typeof P.withResolvers !== "function") {
+    P.withResolvers = function <T>() {
+      let resolve!: (v: T | PromiseLike<T>) => void;
+      let reject!: (e?: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+  }
+}
+
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -15,6 +38,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import {
   createRegistry,
   defineExtension,
@@ -158,7 +182,10 @@ export class ChatAgentHost {
     );
 
     const models = createModels();
-    if (process.env.OPENAI_API_KEY) {
+    if (process.env.DEEPSEEK_API_KEY) {
+      models.setProvider(deepseekProvider());
+      this.modelRef = { provider: "deepseek", modelId: "deepseek-flash" };
+    } else if (process.env.OPENAI_API_KEY) {
       models.setProvider(openaiProvider());
       this.modelRef = { provider: "openai", modelId: "gpt-4o-mini" };
     } else if (process.env.ANTHROPIC_API_KEY) {

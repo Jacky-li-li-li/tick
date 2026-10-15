@@ -2,7 +2,7 @@
   "name": "tick",
   "private": true,
   "version": "0.0.1",
-  "description": "Tick \u2014 always-on-top desktop todo panel",
+  "description": "Tick — always-on-top desktop todo panel",
   "scripts": {
     "dev": "pnpm --filter @tick/desktop dev",
     "build": "pnpm --filter @tick/desktop build",
@@ -18,5 +18,8 @@
       "electron",
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
