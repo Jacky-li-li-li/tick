@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AiLaunchInput,
+  AiLaunchResult,
   AiResumeInput,
   AiTool,
   CreateTodoInput,
@@ -36,11 +37,17 @@ const api = {
       ipcRenderer.invoke("session:get", id),
     bind: (input: { sessionId: string; todoId: string }): Promise<Session> =>
       ipcRenderer.invoke("session:bind", input),
+    isAlive: (
+      sessionId: string,
+    ): Promise<{ sessionId: string; pid?: number; alive: boolean }> =>
+      ipcRenderer.invoke("session:isAlive", sessionId),
   },
   ai: {
     listTools: (): Promise<AiTool[]> => ipcRenderer.invoke("ai:listTools"),
-    launch: (input: AiLaunchInput) => ipcRenderer.invoke("ai:launch", input),
-    resume: (input: AiResumeInput) => ipcRenderer.invoke("ai:resume", input),
+    launch: (input: AiLaunchInput): Promise<AiLaunchResult> =>
+      ipcRenderer.invoke("ai:launch", input),
+    resume: (input: AiResumeInput): Promise<AiLaunchResult> =>
+      ipcRenderer.invoke("ai:resume", input),
   },
   chat: {
     send: (input: { sessionId: string; text: string }) =>

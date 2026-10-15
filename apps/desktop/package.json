@@ -12,7 +12,9 @@
   "dependencies": {
     "@tick/shared": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@tick/ai-core": "workspace:*",
+    "@tick/ai-pi": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.8",

@@ -1,12 +1,24 @@
-/**
- * Pi adapter placeholder.
- * Future: wire Pi provider into @tick/ai-core Registry.
- */
+export { PI_TOOL_ID, PI_CAPABILITIES } from "./capabilities.js";
+export { buildPiArgv } from "./argv.js";
+export { detectPi, resolvePiBinary } from "./detect.js";
+export { PiAdapter } from "./pi-adapter.js";
+export type { PiAdapterOptions } from "./pi-adapter.js";
+export {
+  encodePiSessionCwd,
+  defaultPiSessionRoot,
+  listPiSessionsForCwd,
+  captureNewestPiSessionId,
+} from "./session-store.js";
 
-import type { Registry } from "@tick/ai-core";
+import type { AiToolRegistry } from "@tick/ai-core";
+import { PiAdapter, type PiAdapterOptions } from "./pi-adapter.js";
 
-export const PI_ADAPTER_ID = "pi";
-
-export function registerPiAdapter(_registry: Registry): void {
-  // stub — register Pi provider later
+/** Register PiAdapter on a core registry (Main wiring helper). */
+export function registerPiAdapter(
+  registry: AiToolRegistry,
+  options: PiAdapterOptions,
+): PiAdapter {
+  const adapter = new PiAdapter(options);
+  registry.register(adapter);
+  return adapter;
 }

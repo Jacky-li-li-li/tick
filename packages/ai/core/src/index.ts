@@ -1,26 +1,26 @@
-/**
- * AI core placeholder.
- * Future: Registry, SessionIndex, model routing, etc.
- */
+export type {
+  AiToolId,
+  DeliverPromptMode,
+  AiToolCapabilities,
+  LaunchContext,
+  LaunchResult,
+  SessionListItem,
+  AiToolAdapter,
+} from "./adapter.js";
 
-export interface Registry {
-  // stub — register providers / tools later
-  list(): string[];
-}
+export type { AiToolRegistry } from "./registry.js";
+export { createAiToolRegistry } from "./registry.js";
 
-export interface SessionIndex {
-  // stub — session lookup later
-  get(id: string): unknown | undefined;
-}
+export type { CliSessionRecord, SessionIndex } from "./session-index.js";
+export { createSessionIndex } from "./session-index.js";
 
-export function createRegistry(): Registry {
-  return {
-    list: () => [],
-  };
-}
+export type { PromptDelivery, ClipboardPort } from "./prompt.js";
+export { formatTodoPrompt, createClipboardPromptDelivery } from "./prompt.js";
 
-export function createSessionIndex(): SessionIndex {
-  return {
-    get: () => undefined,
-  };
-}
+export type { SessionNamespace, PanelConversationId } from "./session-policy.js";
+export {
+  qualifySessionKey,
+  assertCliSessionId,
+  assertPanelConversationId,
+  rejectCrossNamespaceSessionId,
+} from "./session-policy.js";

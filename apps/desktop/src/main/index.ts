@@ -13,8 +13,10 @@ import { TodoStore } from "./todo-store";
 import { SessionStore } from "./session-store";
 import {
   createAiHost,
+  isPidAlive,
   launchViaHost,
   listToolsForIpc,
+  probeSessionAlive,
   resumeViaHost,
 } from "./services/ai-host";
 
@@ -105,17 +107,32 @@ function registerIpc() {
       return next;
     },
   );
+  ipcMain.handle("session:isAlive", (_e, sessionId: string) => {
+    const existing = sessions.get(sessionId);
+    return probeSessionAlive(aiHost, sessionId, existing?.pid);
+  });
 
   // —— ai —— (packages/ai/core + ai/pi; CLI session ids from pi, not invented)
   ipcMain.handle("ai:listTools", () => listToolsForIpc(aiHost));
   ipcMain.handle("ai:launch", async (_e, input: AiLaunchInput) => {
-    const result = await launchViaHost(aiHost, input);
+    const todo = input.todoId ? store.get(input.todoId) : undefined;
+    if (input.todoId && !todo) {
+      throw new Error(`todo not found: ${input.todoId}`);
+    }
+    const result = await launchViaHost(aiHost, {
+      ...input,
+      title: todo?.title,
+      body: todo?.content,
+      // empty UI prompt should not override todo title/content
+      prompt: input.prompt?.trim() ? input.prompt : undefined,
+    });
     const session: Session = {
       id: result.sessionId,
       todoId: input.todoId,
       cwd: result.cwd,
       toolId: result.toolId,
       createdAt: new Date().toISOString(),
+      pid: result.pid,
     };
     sessions.set(session);
     if (input.todoId) {
@@ -129,7 +146,9 @@ function registerIpc() {
       ok: true,
       sessionId: result.sessionId,
       spawned: true,
-      clipboard: true,
+      clipboard: result.clipboard === true,
+      pid: result.pid,
+      alive: isPidAlive(result.pid),
       message: "launched via PiAdapter; session id captured from pi store",
     };
   });
@@ -148,12 +167,15 @@ function registerIpc() {
       cwd: result.cwd,
       toolId: result.toolId,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
+      pid: result.pid ?? existing?.pid,
     };
     sessions.set(session);
     return {
       ok: true,
       sessionId: result.sessionId,
       resumed: true,
+      pid: session.pid,
+      alive: isPidAlive(session.pid),
       message: "resumed via PiAdapter (existing id + cwd)",
     };
   });

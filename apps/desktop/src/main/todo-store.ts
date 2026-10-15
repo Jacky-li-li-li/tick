@@ -41,6 +41,10 @@ export class TodoStore {
     fs.renameSync(tmp, this.filePath);
   }
 
+  get(id: string): Todo | undefined {
+    return this.todos.find((x) => x.id === id);
+  }
+
   list(): Todo[] {
     return [...this.todos].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),

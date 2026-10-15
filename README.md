@@ -10,8 +10,8 @@ P0 目标：打开一个小窗口，完成本地 Todo 的增删改查与完成�
 tick/
   apps/desktop/          # Electron 桌面应用（主入口）
   packages/shared/       # 共享类型（Todo / Session / AI）
-  packages/ai/core/      # AI 核心（占位）
-  packages/ai/pi/        # Pi adapter（占位）
+  packages/ai/core/      # AI 核心（Registry / SessionIndex / 契约）
+  packages/ai/pi/        # PiAdapter（cwd / 剪贴板 / pi --session）
 ```
 
 ## 安装
@@ -84,6 +84,7 @@ Todo 模型（`@tick/shared`）：
 | `session:list` | 列出会话 |
 | `session:get` | 按 id 获取 |
 | `session:bind` | 绑定 `{ sessionId, todoId }` |
+| `session:isAlive` | E2 存活探针：`{ sessionId, pid?, alive }`（`process.kill(pid, 0)`） |
 
 ### Chat
 
@@ -101,10 +102,15 @@ Todo 模型（`@tick/shared`）：
 - `ai:*` / `session:*` / `chat:send` 通道已挂载（launch/resume/chat 为 stub）
 - Renderer features：`list`、`editor`、`ai-picker`、`panel-chat`
 
-占位：
+已接 AI 包（本地）：
 
-- `packages/ai/core`、`packages/ai/pi`
-- 真实 AI spawn / panel chat
+- `packages/ai/core`：`AiToolAdapter` / Registry / SessionIndex / session 隔离策略
+- `packages/ai/pi`：`PiAdapter`（clipboard + spawn `pi`；launch 捕获 pi 产出的 session id；resume 只传已有 id + cwd）
+- Main `ai:listTools|launch|resume` 已接到上述包（无 `pi` 二进制时 `available: false`）
+
+仍占位：
+
+- ChatAgentHost / `chat:*`（panel pi-durable；与 CLI session 分库）
 - 飞书 / Feishu（明确不做）
 
 ## License

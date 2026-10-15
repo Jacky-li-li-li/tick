@@ -36,6 +36,23 @@ export type AiTool = {
   id: string;
   name: string;
   available: boolean;
+  capabilities?: {
+    needsCwd: boolean;
+    resumeSession: boolean;
+    deliverPrompt: string;
+    listSessions: boolean;
+  };
+};
+
+export type AiLaunchResult = {
+  ok: boolean;
+  sessionId: string;
+  spawned?: boolean;
+  resumed?: boolean;
+  clipboard?: boolean;
+  pid?: number;
+  alive?: boolean;
+  message?: string;
 };
 
 export type AiLaunchInput = {
@@ -57,4 +74,6 @@ export type Session = {
   cwd?: string;
   toolId?: string;
   createdAt: string;
+  /** Last known CLI process pid for E2 liveness probe */
+  pid?: number;
 };

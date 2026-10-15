@@ -2,13 +2,16 @@
   color-scheme: dark;
   --bg: #12141a;
   --panel: #1a1d27;
+  --panel-elev: #22262f;
   --border: #2a2f3c;
   --text: #e8eaef;
   --muted: #8b93a7;
-  --accent: #6c8cff;
-  --danger: #ff6b7a;
-  --done: #5dca8a;
-  --radius: 10px;
+  --accent: #5b8def;
+  --accent-dim: #3a5a9a;
+  --danger: #e86a6a;
+  --ok: #3ecf8e;
+  --done-muted: #6b7280;
+  --radius: 12px;
   font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
 }
 
@@ -32,7 +35,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -44,6 +48,7 @@ button {
   display: flex;
   flex-direction: column;
   height: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
 .titlebar {
@@ -52,16 +57,23 @@ button {
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  background: var(--panel);
+  background: var(--panel-elev);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
 
 .titlebar h1 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+}
+
+.title-sub {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 6px;
+  font-size: 11px;
 }
 
 .titlebar .actions {
@@ -72,59 +84,77 @@ button {
 
 .icon-btn {
   border: 1px solid var(--border);
-  background: transparent;
+  background: #2a2f3a;
   color: var(--muted);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
-.icon-btn.active {
-  color: var(--accent);
-  border-color: var(--accent);
+.icon-btn.active,
+.icon-btn.on {
+  color: var(--ok);
+  border-color: #2a6b4a;
+  background: #1a3328;
 }
 
 .icon-btn:hover {
+  border-color: var(--accent);
   color: var(--text);
 }
 
 .content {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 0 0 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+}
+
+.region-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  opacity: 0.9;
+  padding: 8px 12px 0;
+  font-weight: 600;
 }
 
 .card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 12px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
 .field label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select,
+.chat-compose input {
   width: 100%;
   border: 1px solid var(--border);
-  background: #10131a;
+  background: #14171e;
   color: var(--text);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 7px 9px;
   outline: none;
+  font-size: 13px;
   -webkit-app-region: no-drag;
 }
 
@@ -134,60 +164,123 @@ button {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus,
+.chat-compose input:focus {
   border-color: var(--accent);
 }
 
 .primary {
-  width: 100%;
-  border: none;
+  border: 1px solid var(--accent);
   background: var(--accent);
-  color: #0b1020;
+  color: #fff;
   font-weight: 600;
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.primary.sm {
+  padding: 4px 10px;
+  font-size: 11px;
+  width: auto;
 }
 
 .primary:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
+.editor-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.editor-actions .primary {
+  width: auto;
+  min-width: 72px;
+}
+
+.editor-readonly {
+  margin-bottom: 8px;
+  font-size: 10px;
+}
+
+/* —— list rows —— */
 .todo-item {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 18px 1fr auto;
   gap: 8px;
   align-items: start;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  margin-bottom: 4px;
+  background: var(--panel-elev);
+  border-radius: 8px;
+  border: 1px solid transparent;
 }
 
-.todo-item:last-child {
-  border-bottom: none;
+.todo-item:hover {
+  border-color: var(--border);
 }
 
+.todo-item.done {
+  opacity: 0.55;
+  background: #181b22;
+}
+
+/* No strikethrough — muted + tag only (QA lock) */
 .todo-item.done .todo-title {
-  text-decoration: line-through;
-  color: var(--muted);
+  color: var(--done-muted);
+  text-decoration: none;
 }
 
 .todo-title {
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.35;
   word-break: break-word;
 }
 
 .todo-content {
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 3px;
+  font-size: 11px;
   color: var(--muted);
   white-space: pre-wrap;
+}
+
+.todo-meta {
+  margin-top: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #2a2f3a;
+  font-size: 10px;
+}
+
+.tag.done-tag {
+  color: var(--done-muted);
+  border: 1px solid #3a3f4a;
+}
+
+.tag.ai {
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
 }
 
 .todo-actions {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: flex-end;
 }
 
 .tiny {
@@ -196,7 +289,12 @@ button {
   color: var(--muted);
   border-radius: 6px;
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: 10px;
+}
+
+.tiny:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .tiny.danger {
@@ -204,15 +302,11 @@ button {
   border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
 }
 
-.tiny.done {
-  color: var(--done);
-}
-
 .check {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin-top: 2px;
-  accent-color: var(--done);
+  accent-color: var(--ok);
 }
 
 .meta-row {
@@ -223,7 +317,7 @@ button {
 }
 
 .meta-row span {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -231,23 +325,161 @@ button {
   border: none;
   background: none;
   color: var(--accent);
-  font-size: 12px;
+  font-size: 11px;
   padding: 0;
 }
 
 .stub {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
+  line-height: 1.45;
 }
 
 .error {
   color: var(--danger);
-  font-size: 12px;
+  font-size: 11px;
   margin-top: 4px;
 }
 
-.edit-row {
+/* —— ai-picker —— */
+.ai-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tool-chip {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #14171e;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-chip.selected {
+  border-color: var(--accent);
+  background: #1a2438;
+}
+
+.tool-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.tool-chip .dot.ok {
+  background: var(--ok);
+}
+
+.tool-chip .dot.off {
+  background: var(--danger);
+  opacity: 0.6;
+}
+
+.tool-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tool-id {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.ai-actions {
+  display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.ai-status {
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+/* —— panel-chat —— */
+.session-bar {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.session-label {
+  margin-right: 2px;
+}
+
+.pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #1a1d24;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.session-id-note {
+  margin-bottom: 6px;
+  font-size: 10px;
+}
+
+.session-id-note code {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.chat-log {
+  height: 110px;
+  overflow-y: auto;
+  background: #14171e;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.bubble {
+  margin-bottom: 6px;
+}
+
+.bubble .who {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.bubble .msg {
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.chat-compose {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-compose input {
+  flex: 1;
+}
+
+.chat-compose .primary {
+  width: auto;
+  flex-shrink: 0;
 }

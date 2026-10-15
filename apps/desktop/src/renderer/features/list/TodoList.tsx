@@ -1,30 +1,29 @@
-import { useState } from "react";
 import type { Todo } from "@tick/shared";
+import { useState } from "react";
 
 const DEFAULT_OPEN_VISIBLE = 5;
 
 type Props = {
   todos: Todo[];
   onRefresh: () => Promise<void>;
+  onEdit?: (todo: Todo) => void;
 };
 
-export function TodoList({ todos, onRefresh }: Props) {
+export function TodoList({ todos, onRefresh, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const openTodos = todos.filter((t) => t.status === "open");
   const doneTodos = todos.filter((t) => t.status === "done");
 
-  // Default: first 5 open only; done excluded until expanded
+  // Collapsed: first 5 open only; done excluded until expanded (C3)
   const visible = expanded
     ? [...openTodos, ...doneTodos]
     : openTodos.slice(0, DEFAULT_OPEN_VISIBLE);
 
   const hiddenOpen = Math.max(0, openTodos.length - DEFAULT_OPEN_VISIBLE);
   const canExpand = hiddenOpen > 0 || doneTodos.length > 0;
+  const total = todos.length;
 
   async function setStatus(id: string, status: "open" | "done") {
     setError(null);
@@ -46,44 +45,21 @@ export function TodoList({ todos, onRefresh }: Props) {
     }
   }
 
-  function startEdit(todo: Todo) {
-    setEditingId(todo.id);
-    setEditTitle(todo.title);
-    setEditContent(todo.content ?? "");
-  }
-
-  async function saveEdit() {
-    if (!editingId) return;
-    const title = editTitle.trim();
-    if (!title) {
-      setError("title is required");
-      return;
-    }
-    setError(null);
-    try {
-      await window.tick.todo.update({
-        id: editingId,
-        title,
-        content: editContent,
-      });
-      setEditingId(null);
-      await onRefresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  const caption = expanded
+    ? `显示全部 ${total}（open ${openTodos.length} + done ${doneTodos.length}）`
+    : `显示 ${DEFAULT_OPEN_VISIBLE}/${total}（优先未完成）`;
 
   return (
-    <section className="card">
+    <section className="card" data-feature="list">
       <div className="meta-row">
-        <span>
-          Todos · 进行中 {openTodos.length}
-          {doneTodos.length > 0 ? ` · 已完成 ${doneTodos.length}` : ""}
-          {!expanded ? ` · 默认显示 ${DEFAULT_OPEN_VISIBLE} 条未完成` : ""}
-        </span>
+        <span>{caption}</span>
         {canExpand && (
-          <button className="linkish" type="button" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "收起" : "展开全部"}
+          <button
+            className="linkish"
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "收起" : "展开 · 其余 open + done"}
           </button>
         )}
       </div>
@@ -96,60 +72,67 @@ export function TodoList({ todos, onRefresh }: Props) {
         </div>
       )}
 
-      {visible.map((todo) => (
-        <div key={todo.id} className={`todo-item ${todo.status === "done" ? "done" : ""}`}>
-          <input
-            className="check"
-            type="checkbox"
-            checked={todo.status === "done"}
-            onChange={() =>
-              setStatus(todo.id, todo.status === "done" ? "open" : "done")
-            }
-            title="完成只改 status，不删除"
-          />
+      {visible.map((todo) => {
+        const isDone = todo.status === "done";
+        return (
+          <div
+            key={todo.id}
+            className={`todo-item ${isDone ? "done" : ""}`}
+          >
+            <input
+              className="check"
+              type="checkbox"
+              checked={isDone}
+              onChange={() => setStatus(todo.id, isDone ? "open" : "done")}
+              title="完成只改 status，不删除"
+            />
 
-          <div>
-            {editingId === todo.id ? (
-              <div className="edit-row">
-                <input
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="标题（必填）"
-                />
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  placeholder="内容（可选）"
-                />
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button className="tiny done" type="button" onClick={saveEdit}>
-                    保存
-                  </button>
-                  <button className="tiny" type="button" onClick={() => setEditingId(null)}>
-                    取消
-                  </button>
-                </div>
+            <div className="todo-body">
+              <div className="todo-title">{todo.title}</div>
+              {todo.content ? (
+                <div className="todo-content">{todo.content}</div>
+              ) : null}
+              <div className="todo-meta">
+                {isDone && <span className="tag done-tag">已完成</span>}
+                {todo.ai && (
+                  <span className="tag ai" title="todo.ai 绑定">
+                    {todo.ai.toolId} · {todo.ai.sessionId} · {todo.ai.cwd}
+                  </span>
+                )}
               </div>
-            ) : (
-              <>
-                <div className="todo-title">{todo.title}</div>
-                {todo.content ? <div className="todo-content">{todo.content}</div> : null}
-              </>
-            )}
-          </div>
+            </div>
 
-          <div className="todo-actions">
-            {editingId !== todo.id && (
-              <button className="tiny" type="button" onClick={() => startEdit(todo)}>
-                编辑
+            <div className="todo-actions">
+              {isDone ? (
+                <button
+                  className="tiny"
+                  type="button"
+                  onClick={() => setStatus(todo.id, "open")}
+                  title="setStatus → open"
+                >
+                  重开
+                </button>
+              ) : null}
+              {onEdit && (
+                <button
+                  className="tiny"
+                  type="button"
+                  onClick={() => onEdit(todo)}
+                >
+                  编辑
+                </button>
+              )}
+              <button
+                className="tiny danger"
+                type="button"
+                onClick={() => remove(todo.id)}
+              >
+                删除
               </button>
-            )}
-            <button className="tiny danger" type="button" onClick={() => remove(todo.id)}>
-              删除
-            </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {error && <div className="error">{error}</div>}
     </section>
