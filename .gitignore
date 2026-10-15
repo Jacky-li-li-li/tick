@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-electron
+out
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+.turbo
+*.local
+.vite
+coverage
+.idea
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,22 @@
+{
+  "name": "tick",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Tick \u2014 always-on-top desktop todo panel",
+  "scripts": {
+    "dev": "pnpm --filter @tick/desktop dev",
+    "build": "pnpm --filter @tick/desktop build",
+    "desktop": "pnpm --filter @tick/desktop dev"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}
