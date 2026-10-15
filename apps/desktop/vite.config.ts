@@ -29,8 +29,8 @@ export default defineConfig({
             rollupOptions: {
               external: mainExternal,
               output: {
-                entryFileNames: "main.js",
-                format: "cjs",
+                entryFileNames: "main.mjs",
+                format: "es",
                 inlineDynamicImports: true,
               },
             },
