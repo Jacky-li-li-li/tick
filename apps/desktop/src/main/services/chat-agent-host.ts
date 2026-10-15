@@ -240,7 +240,19 @@ export class ChatAgentHost {
     if (mapped !== undefined && mapped !== "") {
       const existingId = Number(mapped) as ConversationId;
       const found = await harness.conversation(existingId, ctx);
-      if (found) return found;
+      if (found) {
+        // Provider/key may change across app restarts (e.g. faux → deepseek).
+        // Re-configure so mapped conversations don't stay stuck on an unavailable model.
+        await found.configure(
+          {
+            model: this.modelRef,
+            instructions:
+              "Prefer create_todo when the user asks to add a task. Reply briefly in Chinese when the user writes Chinese.",
+          },
+          ctx,
+        );
+        return found;
+      }
     }
 
     const created = await harness.createConversation(
