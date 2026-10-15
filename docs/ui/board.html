@@ -1,0 +1,173 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><title>Tick UI Board</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#1e1e1e;color:#fff;font-family:-apple-system,"PingFang SC",system-ui,sans-serif;padding:40px 48px 60px}
+.header{display:flex;align-items:baseline;gap:16px;margin-bottom:28px}
+.header h1{font-size:22px;font-weight:600}.header span{font-size:13px;color:#888}
+.row{display:flex;flex-wrap:wrap;gap:36px 28px;margin-bottom:48px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6a8dff;margin:0 0 14px;width:100%}
+.frame{display:flex;flex-direction:column;gap:8px}
+.fname{font-size:11px;color:#aaa;font-family:ui-monospace,Menlo,monospace}
+.win{position:relative;width:260px;height:400px;border-radius:16px;background:rgba(40,42,60,.55);backdrop-filter:blur(28px) saturate(160%);
+border:1px solid rgba(255,255,255,.2);box-shadow:0 16px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.2);display:flex;flex-direction:column;overflow:hidden;
+background-image:radial-gradient(circle at 30% 20%,rgba(255,154,139,.35),transparent 45%),radial-gradient(circle at 80% 70%,rgba(106,141,255,.4),transparent 50%)}
+.top{display:flex;align-items:center;gap:6px;padding:10px 10px 6px}
+.seg{flex:1;display:flex;background:rgba(0,0,0,.25);border-radius:8px;padding:2px}
+.seg b,.seg i{flex:1;text-align:center;font-style:normal;font-weight:500;font-size:11px;padding:4px 0;border-radius:6px;color:rgba(255,255,255,.55)}
+.seg b{background:rgba(255,255,255,.22);color:#fff;font-weight:600}
+.ic{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:11px;flex:none}
+.sub{padding:0 10px 6px}.sub .seg{background:rgba(0,0,0,.18)}.sub b,.sub i{font-size:10px;padding:3px 0}
+.list{flex:1;overflow:hidden;padding:0 10px;display:flex;flex-direction:column;gap:5px}
+.item{display:grid;grid-template-columns:16px 1fr auto;gap:7px;padding:8px;border-radius:10px;background:rgba(255,255,255,.12)}
+.dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);margin-top:1px}
+.dot.on{background:#34c759;border-color:#34c759;position:relative}.dot.on:after{content:"✓";position:absolute;inset:0;text-align:center;font-size:9px;line-height:13px;color:#fff}
+.tt{font-size:12px;font-weight:500}.nn{font-size:10px;color:rgba(255,255,255,.5);margin-top:1px}
+.done .tt{color:rgba(255,255,255,.45);text-decoration:line-through}.done{opacity:.75}
+.bar{padding:1px 0 1px 6px;border-left:2px solid #0a84ff;font-size:11px;color:#9ec5ff;font-weight:600}
+.add{margin:8px 10px 10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.14);font-size:11px;color:rgba(255,255,255,.5)}
+.chead{display:flex;align-items:center;gap:6px;padding:0 10px 6px}.ct{flex:1;text-align:center;font-size:11px;font-weight:600}
+.chat{flex:1;padding:4px 10px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:78%;padding:6px 9px;border-radius:12px;font-size:11px;line-height:1.35}
+.me{align-self:flex-end;background:#0a84ff}.ai{align-self:flex-start;background:rgba(255,255,255,.16)}
+.sheet{position:absolute;left:8px;right:8px;bottom:8px;border-radius:12px;background:rgba(35,37,52,.92);border:1px solid rgba(255,255,255,.2);padding:10px;z-index:2;box-shadow:0 12px 28px rgba(0,0,0,.4)}
+.sheet h3{font-size:12px;margin-bottom:3px}.hint{font-size:10px;color:rgba(255,255,255,.5);margin-bottom:7px}
+.tool,.si{display:flex;align-items:center;gap:7px;padding:7px;border-radius:8px;background:rgba(255,255,255,.1);margin-bottom:4px;font-size:11px}
+.g{width:7px;height:7px;border-radius:50%;background:#34c759}.go{margin-left:auto;color:#0a84ff;font-size:10px}
+.si.new{justify-content:center;color:#0a84ff;background:rgba(10,132,255,.15)}
+.rowf{display:flex;gap:6px;margin-bottom:8px}.path{flex:1;padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.12);font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pick{width:34px;border-radius:8px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:13px}
+.btns{display:flex;gap:5px}.btns span{flex:1;text-align:center;padding:7px;border-radius:8px;background:rgba(255,255,255,.12);font-size:11px}.btns .p{background:#0a84ff}.btns .d{background:rgba(232,106,106,.35);color:#ffb4b4}
+.ring{width:44px;height:44px;margin:0 auto 8px;border-radius:50%;background:conic-gradient(#34c759 0 70%,rgba(255,255,255,.15) 70%);display:grid;place-items:center;position:relative}
+.ring:before{content:"";position:absolute;inset:4px;border-radius:50%;background:rgba(35,37,52,.95)}.ring:after{content:"✓";position:relative;z-index:1;color:#34c759;font-size:16px}
+.ok{text-align:center;padding:12px 4px 4px}
+.field{margin-bottom:7px}label{display:block;font-size:9px;color:rgba(255,255,255,.5);margin-bottom:2px}
+.inp{padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.12);font-size:11px}.ta{min-height:48px}
+.menu{position:absolute;top:40px;right:8px;width:130px;border-radius:10px;background:rgba(35,37,52,.92);border:1px solid rgba(255,255,255,.2);padding:4px;z-index:3;font-size:11px}
+.mi{padding:7px 9px;border-radius:6px}
+.drop{position:absolute;top:72px;left:10px;width:200px;border-radius:12px;background:rgba(35,37,52,.92);border:1px solid rgba(255,255,255,.2);padding:5px;z-index:3;font-size:11px}
+.di{display:flex;justify-content:space-between;padding:7px 8px;border-radius:7px}.di.on{background:rgba(255,255,255,.18)}.di.new{color:#0a84ff;justify-content:center;border-top:1px solid rgba(255,255,255,.1);margin-top:3px}
+.guide{margin:auto 12px;padding:18px 12px;border-radius:12px;background:rgba(255,255,255,.1);text-align:center;font-size:11px}
+.guide b{display:block;font-size:13px;margin-bottom:4px}.guide .cta{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:99px;background:#0a84ff}
+.set .inp{display:flex;justify-content:space-between}
+.tray{width:170px;border-radius:10px;background:rgba(35,37,52,.92);border:1px solid rgba(255,255,255,.2);padding:5px;font-size:11px;box-shadow:0 12px 28px rgba(0,0,0,.4)}
+.dim .list,.dim .add{opacity:.35}
+.canvas-bg{position:fixed;inset:0;background:#1e1e1e;z-index:-1}
+</style>
+<div class="canvas-bg"></div>
+<div class="header"><h1>Tick Panel · UI Board</h1><span>frost glass · locked 2026-10-16 · Figma-style frames</span></div>
+
+<div class="sec">01 · Core pages</div>
+<div class="row">
+<div class="frame"><div class="fname">01 Todo / Open</div><div class="win">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list">
+<div class="item"><div class="dot"></div><div><div class="tt">写本周周报</div><div class="nn">发给 Jacky 前过一遍</div></div><div class="bar">3</div></div>
+<div class="item"><div class="dot"></div><div><div class="tt">面板 UI 评审</div></div><div class="bar">1</div></div>
+<div class="item"><div class="dot"></div><div><div class="tt">买咖啡豆</div></div></div>
+<div class="item"><div class="dot"></div><div><div class="tt">预约体检</div></div></div>
+</div><div class="add">＋ 添加待办，回车确认</div></div></div>
+
+<div class="frame"><div class="fname">02 Todo / Done</div><div class="win">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><i>待办</i><b>已完成</b></div></div>
+<div class="list">
+<div class="item done"><div class="dot on"></div><div><div class="tt">买咖啡豆</div><div class="nn">今天 14:20</div></div></div>
+<div class="item done"><div class="dot on"></div><div><div class="tt">回复工程 PAT</div></div></div>
+<div class="item done"><div class="dot on"></div><div><div class="tt">写本周周报</div></div></div>
+</div><div class="add">＋ 添加待办，回车确认</div></div></div>
+
+<div class="frame"><div class="fname">03 Chat</div><div class="win">
+<div class="top"><div class="seg"><i>待办</i><b>对话</b></div><div class="ic">···</div></div>
+<div class="chead"><div class="ic">☰</div><div class="ct">明早评审面板</div></div>
+<div class="chat"><div class="b me">帮我加一条：明早 10 点评审</div><div class="b ai">已创建待办「明早 10 点评审面板」。</div><div class="b me">再把买咖啡豆标完成</div><div class="b ai">好的，已标记完成。</div></div>
+<div class="add">和 AI 说点什么…</div></div></div>
+
+<div class="frame"><div class="fname">04 Chat / Session list</div><div class="win">
+<div class="top"><div class="seg"><i>待办</i><b>对话</b></div><div class="ic">···</div></div>
+<div class="chead"><div class="ic">☰</div><div class="ct">明早评审面板</div></div>
+<div class="drop"><div class="di on">明早评审面板<small>刚刚</small></div><div class="di">周报整理<small>昨天</small></div><div class="di">咖啡豆采购<small>周二</small></div><div class="di new">＋ 新建会话</div></div>
+<div class="chat" style="opacity:.35"><div class="b me">…</div></div>
+<div class="add">和 AI 说点什么…</div></div></div>
+</div>
+
+<div class="sec">02 · Chrome · settings · tray</div>
+<div class="row">
+<div class="frame"><div class="fname">05 ··· menu</div><div class="win">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list" style="opacity:.4"><div class="item"><div class="dot"></div><div class="tt">写本周周报</div><div class="bar">3</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="menu"><div class="mi">置顶 ✓</div><div class="mi">隐藏</div><div class="mi">模型配置</div></div></div></div>
+
+<div class="frame"><div class="fname">06 Model empty guide</div><div class="win">
+<div class="top"><div class="seg"><i>待办</i><b>对话</b></div><div class="ic">···</div></div>
+<div class="chead"><div class="ic">☰</div><div class="ct">新会话</div></div>
+<div class="guide"><b>先配置 AI 模型</b>还没有可用的模型<br><span class="cta">去配置</span></div>
+<div class="add">和 AI 说点什么…</div></div></div>
+
+<div class="frame"><div class="fname">07 Model config</div><div class="win">
+<div class="top"><div class="seg"><i>待办</i><b>对话</b></div><div class="ic">···</div></div>
+<div class="chead"><div class="ic">☰</div><div class="ct">模型配置</div></div>
+<div class="sheet set" style="top:70px;bottom:auto"><h3>模型配置</h3>
+<div class="field"><label>供应商</label><div class="inp">DeepSeek <span>›</span></div></div>
+<div class="field"><label>模型</label><div class="inp">deepseek-flash <span>›</span></div></div>
+<div class="field"><label>API Key</label><div class="inp">sk-••••3f2a <span>已保存</span></div></div>
+<div class="btns"><span>测试连接</span><span class="p">保存</span></div></div></div></div>
+
+<div class="frame"><div class="fname">08 Tray menu</div><div class="tray"><div class="mi">显示 Tick</div><div class="mi">隐藏面板</div><div class="mi">置顶 ✓</div><div class="mi" style="border-top:1px solid rgba(255,255,255,.12);margin-top:4px">退出</div></div></div>
+</div>
+
+<div class="sec">03 · Bind AI flow</div>
+<div class="row">
+<div class="frame"><div class="fname">09 Pick AI after create</div><div class="win dim">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list"><div class="item"><div class="dot"></div><div class="tt">写本周周报</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="sheet"><h3>为「写本周周报」选 AI</h3><div class="hint">仅展示本机已检测到的工具</div>
+<div class="tool"><span class="g"></span><div>pi<div class="hint" style="margin:0">CLI · 剪贴板投递</div></div></div>
+<div class="tool"><span class="g"></span><div>Claude Code<div class="hint" style="margin:0">已安装</div></div></div>
+<div style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,.5)">跳过，稍后再绑</div></div></div></div>
+
+<div class="frame"><div class="fname">10 Confirm cwd</div><div class="win dim">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list"><div class="item"><div class="dot"></div><div class="tt">写本周周报</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="sheet"><h3>启动 pi</h3><div class="hint">绑定到「写本周周报」· cwd 必填</div>
+<label style="font-size:9px;color:rgba(255,255,255,.5)">工作目录</label>
+<div class="rowf"><div class="path">~/Projects/tick</div><div class="pick">📁</div></div>
+<div class="btns"><span>返回</span><span class="p">启动</span></div></div></div></div>
+
+<div class="frame"><div class="fname">11 Success 3s auto</div><div class="win dim">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list"><div class="item"><div class="dot"></div><div><div class="tt">写本周周报</div></div><div class="bar">1</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="sheet"><div class="ok"><div class="ring"></div>已绑定 pi<div class="hint" style="margin-top:6px">3 秒后自动关闭</div></div></div></div></div>
+
+<div class="frame"><div class="fname">12 Sessions + rebind</div><div class="win dim">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list"><div class="item"><div class="dot"></div><div class="tt">写本周周报</div><div class="bar">3</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="sheet"><h3>写本周周报 · 会话</h3><div class="hint">点竖条数字打开</div>
+<div class="si"><div><b>pi · 周报草稿</b><div class="hint" style="margin:0">~/tick · 今天</div></div><span class="go">打开 ›</span></div>
+<div class="si"><div><b>pi · 数据核对</b><div class="hint" style="margin:0">今天</div></div><span class="go">打开 ›</span></div>
+<div class="si"><div><b>Claude · 大纲</b><div class="hint" style="margin:0">昨天</div></div><span class="go">打开 ›</span></div>
+<div class="si new">＋ 再绑一个 AI</div></div></div></div>
+</div>
+
+<div class="sec">04 · Edit</div>
+<div class="row">
+<div class="frame"><div class="fname">13 Edit todo</div><div class="win dim">
+<div class="top"><div class="seg"><b>待办</b><i>对话</i></div><div class="ic">···</div></div>
+<div class="sub"><div class="seg"><b>待办</b><i>已完成</i></div></div>
+<div class="list"><div class="item"><div class="dot"></div><div class="tt">写本周周报</div><div class="bar">3</div></div></div>
+<div class="add">＋ 添加待办</div>
+<div class="sheet"><h3>编辑待办</h3>
+<div class="field"><label>标题 *</label><div class="inp">写本周周报</div></div>
+<div class="field"><label>内容（选填）</label><div class="inp ta">发给 Jacky 前过一遍数据</div></div>
+<div class="btns"><span class="d">删除</span><span>取消</span><span class="p">保存</span></div></div></div></div>
+</div>
