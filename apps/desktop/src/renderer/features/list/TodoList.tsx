@@ -45,9 +45,10 @@ export function TodoList({ todos, onRefresh, onEdit }: Props) {
     }
   }
 
+  const shownOpen = Math.min(DEFAULT_OPEN_VISIBLE, openTodos.length);
   const caption = expanded
     ? `显示全部 ${total}（open ${openTodos.length} + done ${doneTodos.length}）`
-    : `显示 ${DEFAULT_OPEN_VISIBLE}/${total}（优先未完成）`;
+    : `显示 ${shownOpen}/${total}（优先未完成）`;
 
   return (
     <section className="card" data-feature="list">
