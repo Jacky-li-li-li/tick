@@ -111,6 +111,9 @@ Todo 模型（`@tick/shared`）：
 仍占位：
 
 - ChatAgentHost / `chat:*`（panel pi-durable；与 CLI session 分库）
+- `chat:history` / `chat:send`（panel 历史持久化；assistant 仍 stub）
+- `clipboard:lastDelivered`（QA 可观测上次剪贴板投递）
+- `todo:get`（验证 `todo.ai` 回写）
 - 飞书 / Feishu（明确不做）
 
 ## License

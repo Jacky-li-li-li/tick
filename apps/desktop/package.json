@@ -2,7 +2,7 @@
   "name": "@tick/desktop",
   "version": "0.0.1",
   "private": true,
-  "description": "Tick desktop \u2014 always-on-top todo panel",
+  "description": "Tick desktop — always-on-top todo panel",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -10,13 +10,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
+    "@earendil-works/chord": "^1.2.0",
+    "@earendil-works/pi-ai": "^1.2.0",
+    "@earendil-works/pi-durable": "^1.2.0",
+    "@tick/ai-core": "workspace:*",
+    "@tick/ai-pi": "workspace:*",
     "@tick/shared": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@tick/ai-core": "workspace:*",
-    "@tick/ai-pi": "workspace:*"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.7",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
@@ -24,7 +28,6 @@
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
     "vite-plugin-electron": "^0.28.8",
-    "vite-plugin-electron-renderer": "^0.14.6",
-    "@types/node": "^22.10.7"
+    "vite-plugin-electron-renderer": "^0.14.6"
   }
 }

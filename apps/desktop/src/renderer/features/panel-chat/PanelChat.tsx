@@ -1,40 +1,47 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ChatMessage = {
   who: string;
   text: string;
 };
 
-/** Stub sessions to demonstrate chat:* isolation (≠ CLI / ai session). */
+type StoredMsg = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+  createdAt: string;
+};
+
 const STUB_SESSIONS = [
   {
     key: "A",
     sessionId: "chat-sess-a",
     label: "A @ /tmp/tick-a",
-    seed: [
-      { who: "you · A", text: "帮我建一条「修 IPC 类型」todo" },
-      { who: "agent · A", text: "已 create_todo → list 刷新（pi-durable）" },
-    ] as ChatMessage[],
   },
   {
     key: "B",
     sessionId: "chat-sess-b",
     label: "B @ /tmp/tick-b",
-    seed: [
-      { who: "you · B", text: "这个 session 的历史应与 A 隔离" },
-      { who: "agent · B", text: "chat:* 分库；≠ CLI sessionId" },
-    ] as ChatMessage[],
   },
 ] as const;
+
+function toBubbles(sessionKey: string, rows: StoredMsg[]): ChatMessage[] {
+  return rows.map((m) => ({
+    who:
+      m.role === "user"
+        ? `you · ${sessionKey}`
+        : m.role === "assistant"
+          ? `agent · ${sessionKey}`
+          : `system · ${sessionKey}`,
+    text: m.text,
+  }));
+}
 
 /** Panel chat uses chat:* IPC with its own sessionId namespace (not CLI sessions). */
 export function PanelChat() {
   const [activeKey, setActiveKey] =
     useState<(typeof STUB_SESSIONS)[number]["key"]>("A");
-  const [histories, setHistories] = useState<Record<string, ChatMessage[]>>(
-    () =>
-      Object.fromEntries(STUB_SESSIONS.map((s) => [s.sessionId, [...s.seed]])),
-  );
+  const [histories, setHistories] = useState<Record<string, ChatMessage[]>>({});
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -43,37 +50,36 @@ export function PanelChat() {
     [activeKey],
   );
 
+  const loadHistory = useCallback(async (sessionId: string, key: string) => {
+    try {
+      const rows = (await window.tick.chat.history(sessionId)) as StoredMsg[];
+      setHistories((prev) => ({
+        ...prev,
+        [sessionId]: toBubbles(key, rows ?? []),
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHistory(active.sessionId, active.key);
+  }, [active.sessionId, active.key, loadHistory]);
+
   const messages = histories[active.sessionId] ?? [];
 
   async function send() {
     const trimmed = text.trim();
     if (!trimmed) return;
     setError(null);
-
-    const youMsg: ChatMessage = {
-      who: `you · ${active.key}`,
-      text: trimmed,
-    };
-    setHistories((prev) => ({
-      ...prev,
-      [active.sessionId]: [...(prev[active.sessionId] ?? []), youMsg],
-    }));
     setText("");
 
     try {
-      const result = (await window.tick.chat.send({
+      await window.tick.chat.send({
         sessionId: active.sessionId,
         text: trimmed,
-      })) as { message?: string } | undefined;
-
-      const reply: ChatMessage = {
-        who: `agent · ${active.key}`,
-        text: result?.message ?? "sent (stub) · chat:* ≠ CLI session",
-      };
-      setHistories((prev) => ({
-        ...prev,
-        [active.sessionId]: [...(prev[active.sessionId] ?? []), reply],
-      }));
+      });
+      await loadHistory(active.sessionId, active.key);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -103,7 +109,7 @@ export function PanelChat() {
       <div className="stub session-id-note">
         当前 chat sessionId: <code>{active.sessionId}</code>
         {" · "}
-        注：chat:* ≠ CLI / ai session
+        注：chat:* ≠ CLI / ai session · history 经 IPC 持久化
       </div>
 
       <div className="chat-log">

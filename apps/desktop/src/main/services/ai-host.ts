@@ -18,6 +18,8 @@ export type AiHost = {
   pids: Map<string, number>;
   /** true if the last adapter clipboard write succeeded with non-empty text */
   consumeClipboardFlag: () => boolean;
+  /** last text written for QA observability (may be empty) */
+  peekLastClipboard: () => { text: string; at: string | null };
 };
 
 /** E2: true if process exists (signal 0). */
@@ -61,12 +63,16 @@ export function createAiHost(): AiHost {
   const sessionIndex = createSessionIndex();
   const pids = new Map<string, number>();
   let lastClipboardOk = false;
+  let lastClipboardText = "";
+  let lastClipboardAt: string | null = null;
   const pi = registerPiAdapter(registry, {
     clipboard: {
       writeText: (text) => {
         try {
           clipboard.writeText(text);
           lastClipboardOk = typeof text === "string" && text.length > 0;
+          lastClipboardText = typeof text === "string" ? text : "";
+          lastClipboardAt = new Date().toISOString();
         } catch {
           lastClipboardOk = false;
           throw new Error("clipboard write failed");
@@ -85,6 +91,10 @@ export function createAiHost(): AiHost {
       lastClipboardOk = false;
       return v;
     },
+    peekLastClipboard: () => ({
+      text: lastClipboardText,
+      at: lastClipboardAt,
+    }),
   };
 }
 
@@ -136,10 +146,15 @@ export async function launchViaHost(
   if (!input.cwd) throw new Error("cwd is required");
 
   const promptTrim = input.prompt?.trim() ?? "";
+  // E3: never invent a default "Todo" label for clipboard delivery
   const title =
     input.title?.trim() ||
-    (promptTrim ? promptTrim.split("\n")[0] : "") ||
-    "Todo";
+    (promptTrim ? promptTrim.split("\n")[0] : "");
+  if (!title) {
+    throw new Error(
+      "launch requires a title — pass todoId (with titled todo) or a non-empty prompt",
+    );
+  }
   const body =
     input.body?.trim() ||
     (promptTrim && promptTrim !== title ? promptTrim : undefined);

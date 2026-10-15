@@ -16,6 +16,7 @@ type LaunchState = {
   alive?: boolean;
   spawned?: boolean;
   resumed?: boolean;
+  clipboard?: boolean;
   message?: string;
 } | null;
 
@@ -57,6 +58,18 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
     return id;
   }
 
+  /** Build non-empty launch prompt from todo title + content; omit when empty so main fills from todoId. */
+  function promptFromTodo(id: string): string | undefined {
+    const todo = todos.find((t) => t.id === id);
+    if (!todo) return undefined;
+    const title = todo.title.trim();
+    const content = todo.content?.trim();
+    if (!title && !content) return undefined;
+    if (!content) return title || undefined;
+    if (!title) return content;
+    return `${title}\n\n${content}`;
+  }
+
   async function applyResult(
     toolId: string,
     dir: string,
@@ -84,6 +97,7 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
       alive,
       spawned: result.spawned,
       resumed: result.resumed,
+      clipboard: result.clipboard,
       message: result.message,
     });
 
@@ -106,11 +120,12 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
 
     setBusy(true);
     try {
+      const prompt = promptFromTodo(boundTodoId);
       const result = await window.tick.ai.launch({
         toolId,
         cwd: dir,
         todoId: boundTodoId,
-        prompt: "",
+        ...(prompt ? { prompt } : {}),
       });
 
       if (!result?.ok) {
@@ -123,6 +138,7 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
             pid: result.pid,
             alive: result.alive,
             spawned: result.spawned,
+            clipboard: result.clipboard,
             message: result.message,
           });
         }
@@ -173,6 +189,7 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
           pid: result?.pid,
           alive: result?.alive,
           resumed: result?.resumed,
+          clipboard: result?.clipboard,
           message: result?.message,
         });
         return;
@@ -295,6 +312,9 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
         {status?.alive != null ? ` · alive: ${String(status.alive)}` : ""}
         {status?.spawned != null ? ` · spawned: ${String(status.spawned)}` : ""}
         {status?.resumed != null ? ` · resumed: ${String(status.resumed)}` : ""}
+        {status
+          ? ` · clipboard: ${status.clipboard === undefined ? "undefined" : String(status.clipboard)}`
+          : ""}
         {status?.message ? ` · ${status.message}` : ""}
       </div>
     </section>

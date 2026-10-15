@@ -22,6 +22,7 @@ const api = {
   },
   todo: {
     list: (): Promise<Todo[]> => ipcRenderer.invoke("todo:list"),
+    get: (id: string): Promise<Todo | null> => ipcRenderer.invoke("todo:get", id),
     create: (input: CreateTodoInput): Promise<Todo> =>
       ipcRenderer.invoke("todo:create", input),
     update: (input: UpdateTodoInput): Promise<Todo> =>
@@ -50,8 +51,13 @@ const api = {
       ipcRenderer.invoke("ai:resume", input),
   },
   chat: {
+    history: (sessionId: string) => ipcRenderer.invoke("chat:history", sessionId),
     send: (input: { sessionId: string; text: string }) =>
       ipcRenderer.invoke("chat:send", input),
+  },
+  clipboard: {
+    lastDelivered: (): Promise<{ text: string; at: string | null }> =>
+      ipcRenderer.invoke("clipboard:lastDelivered"),
   },
 };
 

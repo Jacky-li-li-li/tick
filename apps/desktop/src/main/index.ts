@@ -11,6 +11,7 @@ import type {
 } from "@tick/shared";
 import { TodoStore } from "./todo-store";
 import { SessionStore } from "./session-store";
+import { PanelChatStore } from "./panel-chat-store";
 import {
   createAiHost,
   isPidAlive,
@@ -23,6 +24,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let store: TodoStore;
 let sessions: SessionStore;
+let panelChat: PanelChatStore;
 const aiHost = createAiHost();
 
 let mainWindow: BrowserWindow | null = null;
@@ -80,6 +82,7 @@ function registerIpc() {
 
   // —— todo ——
   ipcMain.handle("todo:list", () => store.list());
+  ipcMain.handle("todo:get", (_e, id: string) => store.get(id) ?? null);
   ipcMain.handle("todo:create", (_e, input: CreateTodoInput) => store.create(input));
   ipcMain.handle("todo:update", (_e, input: UpdateTodoInput) => store.update(input));
   ipcMain.handle("todo:setStatus", (_e, input: SetTodoStatusInput) =>
@@ -181,19 +184,33 @@ function registerIpc() {
   });
 
   // —— chat (namespaced; isolated from CLI sessions) ——
+  ipcMain.handle("chat:history", (_e, sessionId: string) =>
+    panelChat.history(sessionId),
+  );
   ipcMain.handle(
     "chat:send",
-    (_e, _input: { sessionId: string; text: string }) => ({
-      ok: false,
-      message: "chat:* stub — panel chat not implemented in P0",
-    }),
+    (_e, input: { sessionId: string; text: string }) => {
+      const result = panelChat.send(input);
+      return {
+        ok: result.ok,
+        sessionId: result.sessionId,
+        message: result.assistant.text,
+        user: result.user,
+        assistant: result.assistant,
+      };
+    },
   );
+
+  // —— clipboard observability (QA E3) ——
+  ipcMain.handle("clipboard:lastDelivered", () => aiHost.peekLastClipboard());
 }
+
 
 app.whenReady().then(() => {
   const dataDir = app.getPath("userData");
   store = new TodoStore(path.join(dataDir, "todos.json"));
   sessions = new SessionStore(path.join(dataDir, "cli-sessions.json"));
+  panelChat = new PanelChatStore(path.join(dataDir, "panel-chat.json"));
   registerIpc();
   createWindow();
   app.on("activate", () => {
