@@ -77,3 +77,28 @@ export type Session = {
   /** Last known CLI process pid for E2 liveness probe */
   pid?: number;
 };
+
+
+export type ChatHistoryItem = {
+  who: "you" | "agent" | "system";
+  text: string;
+  entryId?: string;
+};
+
+export type ChatSendInput = {
+  sessionId: string;
+  text: string;
+};
+
+export type ChatSendResult = {
+  ok: boolean;
+  sessionId: string;
+  conversationId?: string;
+  status?: string;
+  message: string;
+  history?: ChatHistoryItem[];
+};
+
+export type ChatHistoryInput = {
+  sessionId: string;
+};

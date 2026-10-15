@@ -4,6 +4,8 @@ import type {
   AiLaunchResult,
   AiResumeInput,
   AiTool,
+  ChatHistoryItem,
+  ChatSendResult,
   CreateTodoInput,
   Session,
   SetTodoStatusInput,
@@ -51,9 +53,27 @@ const api = {
       ipcRenderer.invoke("ai:resume", input),
   },
   chat: {
-    history: (sessionId: string) => ipcRenderer.invoke("chat:history", sessionId),
-    send: (input: { sessionId: string; text: string }) =>
-      ipcRenderer.invoke("chat:send", input),
+    history: (
+      input: string | { sessionId: string },
+    ): Promise<{
+      ok: boolean;
+      sessionId: string;
+      history: ChatHistoryItem[];
+      messages?: Array<{
+        id: string;
+        role: string;
+        text: string;
+        createdAt: string;
+      }>;
+    }> =>
+      ipcRenderer.invoke(
+        "chat:history",
+        typeof input === "string" ? input : input,
+      ),
+    send: (input: {
+      sessionId: string;
+      text: string;
+    }): Promise<ChatSendResult> => ipcRenderer.invoke("chat:send", input),
   },
   clipboard: {
     lastDelivered: (): Promise<{ text: string; at: string | null }> =>

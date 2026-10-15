@@ -1,61 +1,56 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ChatHistoryItem } from "@tick/shared";
 
 type ChatMessage = {
   who: string;
   text: string;
 };
 
-type StoredMsg = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  text: string;
-  createdAt: string;
-};
-
-const STUB_SESSIONS = [
+const SESSIONS = [
   {
     key: "A",
     sessionId: "chat-sess-a",
-    label: "A @ /tmp/tick-a",
+    label: "A",
   },
   {
     key: "B",
     sessionId: "chat-sess-b",
-    label: "B @ /tmp/tick-b",
+    label: "B",
   },
 ] as const;
 
-function toBubbles(sessionKey: string, rows: StoredMsg[]): ChatMessage[] {
-  return rows.map((m) => ({
-    who:
-      m.role === "user"
-        ? `you · ${sessionKey}`
-        : m.role === "assistant"
-          ? `agent · ${sessionKey}`
-          : `system · ${sessionKey}`,
+function toBubbles(
+  sessionKey: string,
+  items: ChatHistoryItem[],
+): ChatMessage[] {
+  return items.map((m) => ({
+    who: `${m.who} · ${sessionKey}`,
     text: m.text,
   }));
 }
 
-/** Panel chat uses chat:* IPC with its own sessionId namespace (not CLI sessions). */
+/** Panel chat uses chat:* IPC + ChatAgentHost (pi-durable); ≠ CLI sessions. */
 export function PanelChat() {
   const [activeKey, setActiveKey] =
-    useState<(typeof STUB_SESSIONS)[number]["key"]>("A");
-  const [histories, setHistories] = useState<Record<string, ChatMessage[]>>({});
+    useState<(typeof SESSIONS)[number]["key"]>("A");
+  const [histories, setHistories] = useState<Record<string, ChatMessage[]>>(
+    {},
+  );
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const active = useMemo(
-    () => STUB_SESSIONS.find((s) => s.key === activeKey) ?? STUB_SESSIONS[0],
+    () => SESSIONS.find((s) => s.key === activeKey) ?? SESSIONS[0],
     [activeKey],
   );
 
-  const loadHistory = useCallback(async (sessionId: string, key: string) => {
+  const refresh = useCallback(async (sessionId: string, key: string) => {
     try {
-      const rows = (await window.tick.chat.history(sessionId)) as StoredMsg[];
+      const res = await window.tick.chat.history({ sessionId });
       setHistories((prev) => ({
         ...prev,
-        [sessionId]: toBubbles(key, rows ?? []),
+        [sessionId]: toBubbles(key, res.history ?? []),
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -63,37 +58,49 @@ export function PanelChat() {
   }, []);
 
   useEffect(() => {
-    void loadHistory(active.sessionId, active.key);
-  }, [active.sessionId, active.key, loadHistory]);
+    void refresh(active.sessionId, active.key);
+  }, [active.sessionId, active.key, refresh]);
 
   const messages = histories[active.sessionId] ?? [];
 
   async function send() {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || busy) return;
     setError(null);
+    setBusy(true);
     setText("");
-
     try {
-      await window.tick.chat.send({
+      const result = await window.tick.chat.send({
         sessionId: active.sessionId,
         text: trimmed,
       });
-      await loadHistory(active.sessionId, active.key);
+      setHistories((prev) => ({
+        ...prev,
+        [active.sessionId]: toBubbles(
+          active.key,
+          result.history ?? [
+            { who: "you", text: trimmed },
+            { who: "agent", text: result.message },
+          ],
+        ),
+      }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      await refresh(active.sessionId, active.key);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <section className="card" data-feature="panel-chat">
       <div className="meta-row">
-        <span>Panel Chat · chat:* 分库隔离</span>
+        <span>Panel Chat · pi-durable · chat:* 分库</span>
       </div>
 
       <div className="session-bar">
         <span className="session-label">session</span>
-        {STUB_SESSIONS.map((s) => (
+        {SESSIONS.map((s) => (
           <button
             key={s.key}
             type="button"
@@ -107,14 +114,13 @@ export function PanelChat() {
       </div>
 
       <div className="stub session-id-note">
-        当前 chat sessionId: <code>{active.sessionId}</code>
-        {" · "}
-        注：chat:* ≠ CLI / ai session · history 经 IPC 持久化
+        chat sessionId: <code>{active.sessionId}</code>
+        {" · "}≠ CLI / ai session
       </div>
 
       <div className="chat-log">
         {messages.length === 0 && (
-          <div className="stub">此 session 暂无历史</div>
+          <div className="stub">此 session 暂无历史（可试：建一条「修 IPC」todo）</div>
         )}
         {messages.map((m, i) => (
           <div key={`${active.sessionId}-${i}`} className="bubble">
@@ -129,6 +135,7 @@ export function PanelChat() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="对当前 session 说话…"
+          disabled={busy}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -140,9 +147,9 @@ export function PanelChat() {
           className="primary sm"
           type="button"
           onClick={send}
-          disabled={!text.trim()}
+          disabled={!text.trim() || busy}
         >
-          发送
+          {busy ? "…" : "发送"}
         </button>
       </div>
 

@@ -11,7 +11,7 @@ import type {
 } from "@tick/shared";
 import { TodoStore } from "./todo-store";
 import { SessionStore } from "./session-store";
-import { PanelChatStore } from "./panel-chat-store";
+import { ChatAgentHost } from "./services/chat-agent-host";
 import {
   createAiHost,
   isPidAlive,
@@ -24,7 +24,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let store: TodoStore;
 let sessions: SessionStore;
-let panelChat: PanelChatStore;
+let chatHost: ChatAgentHost;
 const aiHost = createAiHost();
 
 let mainWindow: BrowserWindow | null = null;
@@ -183,20 +183,71 @@ function registerIpc() {
     };
   });
 
-  // —— chat (namespaced; isolated from CLI sessions) ——
-  ipcMain.handle("chat:history", (_e, sessionId: string) =>
-    panelChat.history(sessionId),
+  // —— chat (ChatAgentHost / pi-durable; isolated from CLI sessions) ——
+  ipcMain.handle(
+    "chat:history",
+    async (_e, input: string | { sessionId: string }) => {
+      const sessionId =
+        typeof input === "string" ? input : input?.sessionId;
+      if (!sessionId) throw new Error("chat sessionId is required");
+      if (sessions.get(sessionId)) {
+        throw new Error("CLI session id cannot be used for chat:history");
+      }
+      const history = await chatHost.history(sessionId);
+      return {
+        ok: true,
+        sessionId,
+        history,
+        // compat with earlier PanelChatStore shape
+        messages: history.map((h, i) => ({
+          id: h.entryId ?? `m-${i}`,
+          role:
+            h.who === "you" ? "user" : h.who === "agent" ? "assistant" : "system",
+          text: h.text,
+          createdAt: new Date().toISOString(),
+        })),
+      };
+    },
   );
   ipcMain.handle(
     "chat:send",
-    (_e, input: { sessionId: string; text: string }) => {
-      const result = panelChat.send(input);
+    async (_e, input: { sessionId: string; text: string }) => {
+      if (sessions.get(input.sessionId)) {
+        throw new Error("CLI session id cannot be used for chat:send");
+      }
+      const result = await chatHost.send(input.sessionId, input.text);
+      const lastYou = [...result.history].reverse().find((h) => h.who === "you");
+      const lastAgent = [...result.history]
+        .reverse()
+        .find((h) => h.who === "agent");
       return {
         ok: result.ok,
         sessionId: result.sessionId,
-        message: result.assistant.text,
-        user: result.user,
-        assistant: result.assistant,
+        conversationId: result.conversationId,
+        status: result.status,
+        message: result.message,
+        history: result.history,
+        user: lastYou
+          ? {
+              id: lastYou.entryId ?? "user",
+              role: "user" as const,
+              text: lastYou.text,
+              createdAt: new Date().toISOString(),
+            }
+          : undefined,
+        assistant: lastAgent
+          ? {
+              id: lastAgent.entryId ?? "assistant",
+              role: "assistant" as const,
+              text: lastAgent.text,
+              createdAt: new Date().toISOString(),
+            }
+          : {
+              id: "assistant",
+              role: "assistant" as const,
+              text: result.message,
+              createdAt: new Date().toISOString(),
+            },
       };
     },
   );
@@ -210,7 +261,28 @@ app.whenReady().then(() => {
   const dataDir = app.getPath("userData");
   store = new TodoStore(path.join(dataDir, "todos.json"));
   sessions = new SessionStore(path.join(dataDir, "cli-sessions.json"));
-  panelChat = new PanelChatStore(path.join(dataDir, "panel-chat.json"));
+  chatHost = new ChatAgentHost({
+    storageDir: path.join(dataDir, "panel-chat"),
+    createTodo: async (input) => {
+      const todo = store.create({
+        title: input.title,
+        content: input.content,
+      });
+      return { id: todo.id, title: todo.title };
+    },
+    listTodos: async (input) =>
+      store
+        .list()
+        .filter((todo) => (input?.status ? todo.status === input.status : true))
+        .map((todo) => ({
+          id: todo.id,
+          title: todo.title,
+          status: todo.status,
+        })),
+  });
+  void chatHost.start().catch((err) => {
+    console.error("ChatAgentHost start failed", err);
+  });
   registerIpc();
   createWindow();
   app.on("activate", () => {

@@ -88,7 +88,7 @@ Todo 模型（`@tick/shared`）：
 
 ### Chat
 
-`chat:*`（如 `chat:send`）使用独立的 `sessionId` 命名空间，与 CLI session **隔离**。P0 为 stub。
+`chat:*`（如 `chat:send`）使用独立的 `sessionId` 命名空间，与 CLI session **隔离**；由 Main 侧 `ChatAgentHost`（`@earendil-works/pi-durable` + `pi-ai` 1.2.0，JSONL 存储）实现，含 `create_todo` / `list_todos`。
 
 ## P0 范围
 
@@ -119,3 +119,7 @@ Todo 模型（`@tick/shared`）：
 ## License
 
 Private / WIP.
+
+## AI 依赖钉死
+
+桌面端使用 `@earendil-works/pi-durable` / `pi-ai` **1.2.0**（smoke 通过版本；不与 Look 旧主版本双轨）。
