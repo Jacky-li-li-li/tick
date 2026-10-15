@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, globalShortcut } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -28,6 +28,76 @@ let chatHost: ChatAgentHost;
 const aiHost = createAiHost();
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  if (!mainWindow) return;
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function hideMainWindow() {
+  mainWindow?.hide();
+}
+
+function toggleMainWindow() {
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    mainWindow.isVisible() &&
+    mainWindow.isFocused()
+  ) {
+    hideMainWindow();
+    return;
+  }
+  showMainWindow();
+}
+
+function createTray() {
+  if (tray) return;
+  const iconPath = path.join(__dirname, "../resources/tray-icon.png");
+  let icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    // Fallback 16x16 indigo pixel so Linux trays still get a real image
+    icon = nativeImage.createFromDataURL(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR42mPwd3v6nxLMMGrAqAGjBgwXAwC/zHkfeRAWwgAAAABJRU5ErkJggg==",
+    );
+  }
+  if (process.platform === "darwin") {
+    icon = icon.resize({ width: 16, height: 16 });
+  }
+  tray = new Tray(icon);
+  tray.setToolTip("Tick");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "显示面板",
+        click: () => showMainWindow(),
+      },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => app.quit(),
+      },
+    ]),
+  );
+  tray.on("click", () => showMainWindow());
+  tray.on("double-click", () => showMainWindow());
+}
+
+function registerGlobalShortcuts() {
+  const chord = "CommandOrControl+Shift+Space";
+  const ok = globalShortcut.register(chord, () => {
+    toggleMainWindow();
+  });
+  if (!ok) {
+    console.warn(`Failed to register global shortcut: ${chord}`);
+  }
+}
+
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -72,11 +142,11 @@ function registerIpc() {
     return mainWindow?.isAlwaysOnTop() ?? false;
   });
   ipcMain.handle("window:show", () => {
-    mainWindow?.show();
+    showMainWindow();
     return true;
   });
   ipcMain.handle("window:hide", () => {
-    mainWindow?.hide();
+    hideMainWindow();
     return true;
   });
 
@@ -285,11 +355,27 @@ app.whenReady().then(() => {
   });
   registerIpc();
   createWindow();
+  createTray();
+  registerGlobalShortcuts();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else {
+      showMainWindow();
+    }
   });
 });
 
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
+
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // Hiding the panel must not quit; only quit when no windows remain and not darwin.
+  // Tray keeps the process alive while the window is merely hidden (not closed).
+  if (process.platform !== "darwin") {
+    // Keep running if tray exists and window was only hidden (mainWindow still set).
+    if (mainWindow && !mainWindow.isDestroyed()) return;
+    app.quit();
+  }
 });
