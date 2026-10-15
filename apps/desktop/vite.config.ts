@@ -3,12 +3,19 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import electron from "vite-plugin-electron/simple";
+import { builtinModules } from "node:module";
 
 const pkgRoot = path.dirname(fileURLToPath(import.meta.url));
 
+// Bundle @earendil-works/* into main: those packages are ESM-only (exports.import),
+// while vite-plugin-electron emits CJS that would otherwise require() subpaths and crash.
+const mainExternal = [
+  "electron",
+  ...builtinModules,
+  ...builtinModules.map((m) => `node:${m}`),
+];
+
 export default defineConfig({
-  // Renderer-only root. Main/preload entries MUST use absolute paths under pkgRoot
-  // so they are not resolved relative to src/renderer.
   root: path.join(pkgRoot, "src/renderer"),
   plugins: [
     react(),
@@ -20,13 +27,11 @@ export default defineConfig({
             outDir: path.join(pkgRoot, "dist-electron"),
             emptyOutDir: false,
             rollupOptions: {
-              external: [
-                "electron",
-                /^@earendil-works\//,
-                /^node:/,
-              ],
+              external: mainExternal,
               output: {
                 entryFileNames: "main.js",
+                format: "cjs",
+                inlineDynamicImports: true,
               },
             },
           },
