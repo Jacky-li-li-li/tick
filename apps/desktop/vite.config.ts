@@ -38,6 +38,7 @@ export default defineConfig({
         },
       },
       preload: {
+        // Electron preload supports CJS cleanly; .mjs + require() breaks sandbox.
         input: path.join(pkgRoot, "src/preload/index.ts"),
         vite: {
           build: {
@@ -46,7 +47,9 @@ export default defineConfig({
             rollupOptions: {
               external: ["electron"],
               output: {
-                entryFileNames: "preload.mjs",
+                entryFileNames: "preload.cjs",
+                format: "cjs",
+                exports: "auto",
               },
             },
           },
