@@ -1,7 +1,6 @@
-import { app, BrowserWindow, clipboard, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
 import type {
   AiLaunchInput,
   AiResumeInput,
@@ -11,10 +10,18 @@ import type {
   UpdateTodoInput,
 } from "@tick/shared";
 import { TodoStore } from "./todo-store";
+import { SessionStore } from "./session-store";
+import {
+  createAiHost,
+  launchViaHost,
+  listToolsForIpc,
+  resumeViaHost,
+} from "./services/ai-host";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const store = new TodoStore();
-const sessions = new Map<string, Session>();
+let store: TodoStore;
+let sessions: SessionStore;
+const aiHost = createAiHost();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -79,7 +86,7 @@ function registerIpc() {
   ipcMain.handle("todo:delete", (_e, id: string) => store.delete(id));
 
   // —— session (CLI / tool sessions; not chat) ——
-  ipcMain.handle("session:list", () => [...sessions.values()]);
+  ipcMain.handle("session:list", () => sessions.list());
   ipcMain.handle("session:get", (_e, id: string) => sessions.get(id) ?? null);
   ipcMain.handle(
     "session:bind",
@@ -87,7 +94,7 @@ function registerIpc() {
       const session = sessions.get(input.sessionId);
       if (!session) throw new Error(`session not found: ${input.sessionId}`);
       const next = { ...session, todoId: input.todoId };
-      sessions.set(input.sessionId, next);
+      sessions.set(next);
       if (session.toolId && session.cwd) {
         store.bindAi(input.todoId, {
           toolId: session.toolId,
@@ -99,55 +106,55 @@ function registerIpc() {
     },
   );
 
-  // —— ai ——
-  ipcMain.handle("ai:listTools", () => [
-    { id: "pi", name: "Pi", available: false },
-    { id: "stub", name: "Stub", available: true },
-  ]);
-  ipcMain.handle("ai:launch", (_e, input: AiLaunchInput) => {
-    const sessionId = randomUUID();
-    const prompt = input.prompt?.trim() || "";
-    if (prompt) clipboard.writeText(prompt);
-    // spawn stub — real pi spawn later when binary is available
+  // —— ai —— (packages/ai/core + ai/pi; CLI session ids from pi, not invented)
+  ipcMain.handle("ai:listTools", () => listToolsForIpc(aiHost));
+  ipcMain.handle("ai:launch", async (_e, input: AiLaunchInput) => {
+    const result = await launchViaHost(aiHost, input);
     const session: Session = {
-      id: sessionId,
+      id: result.sessionId,
       todoId: input.todoId,
-      cwd: input.cwd,
-      toolId: input.toolId,
+      cwd: result.cwd,
+      toolId: result.toolId,
       createdAt: new Date().toISOString(),
     };
-    sessions.set(sessionId, session);
+    sessions.set(session);
     if (input.todoId) {
       store.bindAi(input.todoId, {
-        toolId: input.toolId,
-        sessionId,
-        cwd: input.cwd,
+        toolId: result.toolId,
+        sessionId: result.sessionId,
+        cwd: result.cwd,
       });
     }
     return {
       ok: true,
-      sessionId,
-      spawned: false,
-      clipboard: !!prompt,
-      message: "P0 stub: prompt copied to clipboard; spawn deferred",
+      sessionId: result.sessionId,
+      spawned: true,
+      clipboard: true,
+      message: "launched via PiAdapter; session id captured from pi store",
     };
   });
-  ipcMain.handle("ai:resume", (_e, input: AiResumeInput) => {
+  ipcMain.handle("ai:resume", async (_e, input: AiResumeInput) => {
     const existing = sessions.get(input.sessionId);
-    if (!existing) {
-      const session: Session = {
-        id: input.sessionId,
-        cwd: input.cwd,
-        toolId: input.toolId,
-        createdAt: new Date().toISOString(),
-      };
-      sessions.set(input.sessionId, session);
-    }
+    const todoId = existing?.todoId;
+    const result = await resumeViaHost(aiHost, {
+      toolId: input.toolId,
+      sessionId: input.sessionId,
+      cwd: input.cwd,
+      todoId,
+    });
+    const session: Session = {
+      id: result.sessionId,
+      todoId,
+      cwd: result.cwd,
+      toolId: result.toolId,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    };
+    sessions.set(session);
     return {
       ok: true,
-      sessionId: input.sessionId,
-      resumed: false,
-      message: "P0 stub: resume deferred until tool binary is available",
+      sessionId: result.sessionId,
+      resumed: true,
+      message: "resumed via PiAdapter (existing id + cwd)",
     };
   });
 
@@ -162,6 +169,9 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
+  const dataDir = app.getPath("userData");
+  store = new TodoStore(path.join(dataDir, "todos.json"));
+  sessions = new SessionStore(path.join(dataDir, "cli-sessions.json"));
   registerIpc();
   createWindow();
   app.on("activate", () => {

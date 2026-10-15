@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type {
   CreateTodoInput,
   SetTodoStatusInput,
@@ -7,8 +9,37 @@ import type {
   UpdateTodoInput,
 } from "@tick/shared";
 
+type PersistShape = { version: 1; todos: Todo[] };
+
 export class TodoStore {
   private todos: Todo[] = [];
+  private readonly filePath: string;
+
+  constructor(filePath: string) {
+    this.filePath = filePath;
+    this.load();
+  }
+
+  private load(): void {
+    try {
+      if (!fs.existsSync(this.filePath)) return;
+      const raw = fs.readFileSync(this.filePath, "utf8");
+      const parsed = JSON.parse(raw) as PersistShape;
+      if (parsed?.version === 1 && Array.isArray(parsed.todos)) {
+        this.todos = parsed.todos;
+      }
+    } catch {
+      this.todos = [];
+    }
+  }
+
+  private save(): void {
+    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+    const payload: PersistShape = { version: 1, todos: this.todos };
+    const tmp = `${this.filePath}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
+    fs.renameSync(tmp, this.filePath);
+  }
 
   list(): Todo[] {
     return [...this.todos].sort(
@@ -31,6 +62,7 @@ export class TodoStore {
       updatedAt: now,
     };
     this.todos.push(todo);
+    this.save();
     return todo;
   }
 
@@ -45,8 +77,7 @@ export class TodoStore {
     }
     const next: Todo = {
       ...current,
-      title:
-        input.title !== undefined ? input.title.trim() : current.title,
+      title: input.title !== undefined ? input.title.trim() : current.title,
       content:
         input.content !== undefined
           ? input.content.trim() || undefined
@@ -54,6 +85,7 @@ export class TodoStore {
       updatedAt: new Date().toISOString(),
     };
     this.todos[idx] = next;
+    this.save();
     return next;
   }
 
@@ -71,13 +103,16 @@ export class TodoStore {
       updatedAt: new Date().toISOString(),
     };
     this.todos[idx] = next;
+    this.save();
     return next;
   }
 
   delete(id: string): boolean {
     const before = this.todos.length;
     this.todos = this.todos.filter((t) => t.id !== id);
-    return this.todos.length < before;
+    const changed = this.todos.length < before;
+    if (changed) this.save();
+    return changed;
   }
 
   bindAi(id: string, ai: TodoAiMeta): Todo {
@@ -91,6 +126,7 @@ export class TodoStore {
       updatedAt: new Date().toISOString(),
     };
     this.todos[idx] = next;
+    this.save();
     return next;
   }
 }
