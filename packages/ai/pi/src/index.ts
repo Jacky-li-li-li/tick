@@ -1,5 +1,6 @@
 export { PI_TOOL_ID, PI_CAPABILITIES } from "./capabilities.js";
 export { buildPiArgv } from "./argv.js";
+export { newCliSessionId } from "./session-id.js";
 export { detectPi, resolvePiBinary } from "./detect.js";
 export { PiAdapter } from "./pi-adapter.js";
 export type { PiAdapterOptions } from "./pi-adapter.js";

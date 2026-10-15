@@ -13,10 +13,8 @@ import { assertCliSessionId, formatTodoPrompt } from "@tick/ai-core";
 import { buildPiArgv } from "./argv.js";
 import { PI_CAPABILITIES, PI_TOOL_ID } from "./capabilities.js";
 import { detectPi, resolvePiBinary } from "./detect.js";
-import {
-  captureNewestPiSessionId,
-  listPiSessionsForCwd,
-} from "./session-store.js";
+import { newCliSessionId } from "./session-id.js";
+import { listPiSessionsForCwd } from "./session-store.js";
 
 export interface PiAdapterOptions {
   resolveBinary?: () => Promise<string>;
@@ -30,11 +28,6 @@ export interface PiAdapterOptions {
     cwd: string;
     env?: Record<string, string>;
   }) => Promise<void | { pid?: number }>;
-  /**
-   * After a new launch, capture the session id pi produced (do not invent formats).
-   * Typically: list newest session for cwd from pi's session store.
-   */
-  captureSessionId?: (cwd: string) => Promise<string | undefined>;
   listSessionsForCwd?: (cwd: string) => Promise<SessionListItem[]>;
   /** Optional absolute path hint for `pi` binary */
   binaryHint?: string;
@@ -78,8 +71,13 @@ export class PiAdapter implements AiToolAdapter {
     const text = formatTodoPrompt({ title: ctx.title, body: ctx.body });
     await this.options.clipboard.writeText(text);
 
-    // New session: let pi create the id (no --session-id by default).
-    const argv = buildPiArgv({ name: ctx.sessionName });
+    // Pre-allocate the session id: `pi --session-id <id>` creates the session
+    // under this exact id if missing (verified with pi 1.2.0). This keeps the
+    // todo→session binding deterministic — no fragile post-launch capture.
+    const sessionId = newCliSessionId();
+    assertCliSessionId(sessionId);
+
+    const argv = buildPiArgv({ sessionId, name: ctx.sessionName });
     const spawned = await this.options.spawnPi({
       bin,
       argv,
@@ -87,17 +85,6 @@ export class PiAdapter implements AiToolAdapter {
       env: ctx.env,
     });
     const pid = spawned && typeof spawned === "object" ? spawned.pid : undefined;
-
-    // Brief settle so pi can create the session file before we read the store.
-    await new Promise((r) => setTimeout(r, 400));
-    const sessionId = await this.guessNewestSessionId(ctx.cwd);
-
-    if (!sessionId) {
-      throw new Error(
-        "pi launched but session id could not be captured from the session store",
-      );
-    }
-    assertCliSessionId(sessionId);
 
     return { toolId: this.id, sessionId, cwd: ctx.cwd, pid };
   }
@@ -124,13 +111,4 @@ export class PiAdapter implements AiToolAdapter {
     return listPiSessionsForCwd(cwd);
   }
 
-  private async guessNewestSessionId(cwd: string): Promise<string | undefined> {
-    if (this.options.captureSessionId) {
-      return this.options.captureSessionId(cwd);
-    }
-    const fromHook = await captureNewestPiSessionId(cwd);
-    if (fromHook) return fromHook;
-    const items = await this.listSessions(cwd);
-    return items[0]?.sessionId;
-  }
 }

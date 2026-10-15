@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { Todo } from "@tick/shared";
 
 type Props = {
-  onCreated: () => Promise<void>;
+  onCreated: (created?: Todo) => void | Promise<void>;
   /** When set, editor switches to edit mode with CTA「保存」. */
   editingTodo?: Todo | null;
   onSaved?: () => Promise<void>;
@@ -53,13 +53,13 @@ export function TodoEditor({
         setContent("");
         await onSaved?.();
       } else {
-        await window.tick.todo.create({
+        const created = await window.tick.todo.create({
           title: t,
           content: content.trim() || undefined,
         });
         setTitle("");
         setContent("");
-        await onCreated();
+        await onCreated(created);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

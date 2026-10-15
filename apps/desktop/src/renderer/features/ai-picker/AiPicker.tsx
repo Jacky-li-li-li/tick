@@ -6,6 +6,10 @@ type Props = {
   todos?: Todo[];
   /** After successful launch/resume, refresh so todo.ai can appear. */
   onRefresh?: () => void | Promise<void>;
+  /** Preselect this todo (e.g. from list「拉起 AI」/ created nudge). */
+  focusTodoId?: string | null;
+  /** Called once after focusTodoId has been applied. */
+  onFocusHandled?: () => void;
 };
 
 type LaunchState = {
@@ -20,7 +24,12 @@ type LaunchState = {
   message?: string;
 } | null;
 
-export function AiPicker({ todos = [], onRefresh }: Props) {
+export function AiPicker({
+  todos = [],
+  onRefresh,
+  focusTodoId = null,
+  onFocusHandled,
+}: Props) {
   const [tools, setTools] = useState<AiTool[]>([]);
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [cwd, setCwd] = useState("");
@@ -40,6 +49,15 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
       .catch(() => setTools([]));
   }, []);
 
+  // Preselect a todo when a parent view (list button / created nudge) asks.
+  useEffect(() => {
+    if (focusTodoId) {
+      setTodoId(focusTodoId);
+      setError(null);
+      onFocusHandled?.();
+    }
+  }, [focusTodoId, onFocusHandled]);
+
   function requireCwd(): string | null {
     const trimmed = cwd.trim();
     if (!trimmed) {
@@ -47,6 +65,18 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
       return null;
     }
     return trimmed;
+  }
+
+  async function pickCwd() {
+    setError(null);
+    try {
+      const picked = await window.tick.dialog.pickDirectory({
+        defaultPath: cwd.trim() || undefined,
+      });
+      if (picked) setCwd(picked);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   function requireTodoId(): string | null {
@@ -251,15 +281,25 @@ export function AiPicker({ todos = [], onRefresh }: Props) {
 
       <div className="field">
         <label htmlFor="ai-cwd">工作目录 cwd *</label>
-        <input
-          id="ai-cwd"
-          value={cwd}
-          onChange={(e) => {
-            setCwd(e.target.value);
-            if (error) setError(null);
-          }}
-          placeholder="/tmp/tick-a（必选）"
-        />
+        <div className="cwd-row">
+          <input
+            id="ai-cwd"
+            value={cwd}
+            onChange={(e) => {
+              setCwd(e.target.value);
+              if (error) setError(null);
+            }}
+            placeholder="点击「选择」或粘贴绝对路径"
+          />
+          <button
+            className="tiny"
+            type="button"
+            onClick={pickCwd}
+            title="从 Finder 选择目录"
+          >
+            选择…
+          </button>
+        </div>
       </div>
 
       <div className="field">

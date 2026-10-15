@@ -22,6 +22,10 @@ const api = {
     show: (): Promise<boolean> => ipcRenderer.invoke("window:show"),
     hide: (): Promise<boolean> => ipcRenderer.invoke("window:hide"),
   },
+  dialog: {
+    pickDirectory: (input?: { defaultPath?: string }): Promise<string | null> =>
+      ipcRenderer.invoke("dialog:pickDirectory", input),
+  },
   todo: {
     list: (): Promise<Todo[]> => ipcRenderer.invoke("todo:list"),
     get: (id: string): Promise<Todo | null> => ipcRenderer.invoke("todo:get", id),

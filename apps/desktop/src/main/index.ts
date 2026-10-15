@@ -1,4 +1,14 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, globalShortcut } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  globalShortcut,
+  type OpenDialogOptions,
+} from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -149,6 +159,25 @@ function registerIpc() {
     hideMainWindow();
     return true;
   });
+
+  // —— dialog ——
+  ipcMain.handle(
+    "dialog:pickDirectory",
+    async (_e, input?: { defaultPath?: string }) => {
+      const options: OpenDialogOptions = {
+        title: "选择工作目录",
+        properties: ["openDirectory", "createDirectory"],
+        defaultPath: input?.defaultPath?.trim() || undefined,
+      };
+      const parent =
+        mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+      const result = parent
+        ? await dialog.showOpenDialog(parent, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) return null;
+      return result.filePaths[0];
+    },
+  );
 
   // —— todo ——
   ipcMain.handle("todo:list", () => store.list());

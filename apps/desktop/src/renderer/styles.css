@@ -170,6 +170,18 @@ button {
   border-color: var(--accent);
 }
 
+.cwd-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cwd-row input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
 .primary {
   border: 1px solid var(--accent);
   background: var(--accent);
@@ -206,6 +218,27 @@ button {
 .editor-readonly {
   margin-bottom: 8px;
   font-size: 10px;
+}
+
+/* —— created-todo AI nudge —— */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* —— list rows —— */
@@ -276,6 +309,11 @@ button {
   border: 1px solid var(--accent-dim);
 }
 
+.tag.ai.clickable:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+}
+
 .todo-actions {
   display: flex;
   flex-direction: column;
@@ -295,6 +333,11 @@ button {
 .tiny:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+
+.tiny:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .tiny.danger {

@@ -26,7 +26,8 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - `@earendil-works/*` 被打包进 main（因 ESM-only），未做 externalize
 - IPC 面在 `apps/desktop/src/preload/index.ts`（暴露 `window.tick`）；新增通道要同时改 main 的 `ipcMain.handle` 与 preload
 - 双会话命名空间必须隔离：CLI pi session id ≠ 面板 pi-durable conversation id；用 `@tick/ai-core` 的 session-policy 守卫，禁止把面板 id 当 CLI id 存储
-- PiAdapter 把 prompt 写系统剪贴板（`deliverPrompt: 'clipboard'`）并 spawn `pi`；新 session id 从 `~/.pi/agent/sessions/--<encoded-cwd>--/` 读回（best-effort，依赖 400ms settle，已知脆弱）
+- PiAdapter 把 prompt 写系统剪贴板（`deliverPrompt: 'clipboard'`）；launch 预生成 UUIDv7 session id（`packages/ai/pi/src/session-id.ts` 的 `newCliSessionId`）交给 `pi --session-id` 由 pi 落盘，不做事后捕获
+- macOS 上 launch/resume 经 `open -a Terminal <launch.command>` 在真实终端里可见运行 pi（脚本将 pid 写入 pidfile 回传）；非 macOS 回退 detached spawn——注意：无 TTY 时 pi 会静默退出
 - 面板 `ChatAgentHost` 无 `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` 时回退到 pi-ai 的 `faux` provider，工具调用是正则模拟 stub
 - 持久化为 Electron userData 下的 JSON：`todos.json`、`cli-sessions.json`、`panel-chat/*.jsonl`；无 SQLite
 

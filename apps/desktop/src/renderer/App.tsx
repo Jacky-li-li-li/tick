@@ -11,6 +11,12 @@ export function App() {
   /** QA #3: list+editor dominate; AI/Chat collapsed until「更多」. */
   const [showExtras, setShowExtras] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  /** Todo id to preselect in AiPicker (from list button / created notice). */
+  const [aiRequestTodoId, setAiRequestTodoId] = useState<string | null>(null);
+  /** Freshly created todo — shows a one-line「拉起 AI」nudge. */
+  const [justCreated, setJustCreated] = useState<{ id: string; title: string } | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
     const list = await window.tick.todo.list();
@@ -30,6 +36,20 @@ export function App() {
   async function hidePanel() {
     await window.tick.window.hide();
   }
+
+  /** Reveal ai-picker, preselect the todo, and scroll it into view. */
+  const requestAiFor = useCallback((todoId: string) => {
+    setShowExtras(true);
+    setAiRequestTodoId(todoId);
+    setJustCreated(null);
+    window.setTimeout(() => {
+      document
+        .querySelector('[data-feature="ai-picker"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 60);
+  }, []);
+
+  const handleAiFocusHandled = useCallback(() => setAiRequestTodoId(null), []);
 
   return (
     <div className="app">
@@ -71,7 +91,10 @@ export function App() {
         <div className="region-label">editor</div>
         <TodoEditor
           editingTodo={editingTodo}
-          onCreated={refresh}
+          onCreated={async (created) => {
+            if (created) setJustCreated({ id: created.id, title: created.title });
+            await refresh();
+          }}
           onSaved={async () => {
             setEditingTodo(null);
             await refresh();
@@ -79,17 +102,43 @@ export function App() {
           onCancelEdit={() => setEditingTodo(null)}
         />
 
+        {justCreated && (
+          <div className="notice">
+            <span className="notice-text">已添加「{justCreated.title}」</span>
+            <button
+              className="tiny"
+              type="button"
+              onClick={() => requestAiFor(justCreated.id)}
+            >
+              拉起 AI
+            </button>
+            <button
+              className="tiny"
+              type="button"
+              onClick={() => setJustCreated(null)}
+            >
+              忽略
+            </button>
+          </div>
+        )}
+
         <div className="region-label">list</div>
         <TodoList
           todos={todos}
           onRefresh={refresh}
           onEdit={(todo) => setEditingTodo(todo)}
+          onAiRequest={requestAiFor}
         />
 
         {showExtras && (
           <>
             <div className="region-label">ai-picker</div>
-            <AiPicker todos={todos} onRefresh={refresh} />
+            <AiPicker
+              todos={todos}
+              onRefresh={refresh}
+              focusTodoId={aiRequestTodoId}
+              onFocusHandled={handleAiFocusHandled}
+            />
             <div className="region-label">panel-chat</div>
             <PanelChat />
           </>

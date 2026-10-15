@@ -7,11 +7,15 @@ type Props = {
   todos: Todo[];
   onRefresh: () => Promise<void>;
   onEdit?: (todo: Todo) => void;
+  /** Reveal ai-picker with this todo preselected. */
+  onAiRequest?: (todoId: string) => void;
 };
 
-export function TodoList({ todos, onRefresh, onEdit }: Props) {
+export function TodoList({ todos, onRefresh, onEdit, onAiRequest }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Todo currently resuming its bound pi session (disabled state). */
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   const openTodos = todos.filter((t) => t.status === "open");
   const doneTodos = todos.filter((t) => t.status === "done");
@@ -42,6 +46,27 @@ export function TodoList({ todos, onRefresh, onEdit }: Props) {
       await onRefresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** Jump back to the bound pi session: `pi --session <id>` in a Terminal. */
+  async function resumeSession(todo: Todo) {
+    if (!todo.ai) return;
+    setError(null);
+    setResumingId(todo.id);
+    try {
+      const result = await window.tick.ai.resume({
+        toolId: todo.ai.toolId,
+        sessionId: todo.ai.sessionId,
+        cwd: todo.ai.cwd,
+      });
+      if (!result?.ok) {
+        setError(result?.message ?? "resume 失败（ok=false）");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResumingId(null);
     }
   }
 
@@ -96,9 +121,14 @@ export function TodoList({ todos, onRefresh, onEdit }: Props) {
               <div className="todo-meta">
                 {isDone && <span className="tag done-tag">已完成</span>}
                 {todo.ai && (
-                  <span className="tag ai" title="todo.ai 绑定">
+                  <button
+                    className="tag ai clickable"
+                    type="button"
+                    onClick={() => resumeSession(todo)}
+                    title="点击回到该 pi 会话（pi --session）"
+                  >
                     {todo.ai.toolId} · {todo.ai.sessionId} · {todo.ai.cwd}
-                  </span>
+                  </button>
                 )}
               </div>
             </div>
@@ -112,6 +142,27 @@ export function TodoList({ todos, onRefresh, onEdit }: Props) {
                   title="setStatus → open"
                 >
                   重开
+                </button>
+              ) : null}
+              {!isDone && todo.ai ? (
+                <button
+                  className="tiny"
+                  type="button"
+                  onClick={() => resumeSession(todo)}
+                  disabled={resumingId === todo.id}
+                  title="跳回已绑定的 pi 会话（pi --session）"
+                >
+                  {resumingId === todo.id ? "打开中…" : "回到会话"}
+                </button>
+              ) : null}
+              {!isDone && onAiRequest ? (
+                <button
+                  className="tiny"
+                  type="button"
+                  onClick={() => onAiRequest(todo.id)}
+                  title="绑定并拉起 AI 会话（剪贴板 + pi）"
+                >
+                  拉起 AI
                 </button>
               ) : null}
               {onEdit && (

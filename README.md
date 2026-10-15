@@ -122,4 +122,4 @@ Private / WIP.
 
 ## AI 依赖钉死
 
-桌面端使用 `@earendil-works/pi-durable` / `pi-ai` **1.2.0**（smoke 通过版本；不与 Look 旧主版本双轨）。
+桌面端使用 `@earendil-works/pi-durable` / `pi-ai` **1.2.0**（smoke 通过版本）。

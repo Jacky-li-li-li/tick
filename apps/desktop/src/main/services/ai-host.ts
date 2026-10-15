@@ -1,4 +1,8 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFile, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { clipboard } from "electron";
 import {
   createAiToolRegistry,
@@ -58,6 +62,101 @@ function spawnPiDetached(args: {
   });
 }
 
+/** POSIX shell single-quote escaping. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Expand a leading `~` in user-supplied cwd (absolute paths pass through). */
+function expandUserPath(value: string): string {
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+async function pollPidFile(
+  filePath: string,
+  timeoutMs: number,
+): Promise<number | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const raw = await readFile(filePath, "utf8");
+      const pid = Number.parseInt(raw.trim(), 10);
+      if (Number.isInteger(pid) && pid > 0) return pid;
+    } catch {
+      // pidfile not written yet
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return undefined;
+}
+
+/**
+ * macOS: make pi visible in a real Terminal window via
+ * `open -a Terminal <launch.command>` (no Apple Events permission needed).
+ * The script records its own pid (kept by `exec pi`) into a pidfile so the
+ * host still gets a real pid for `session:isAlive`.
+ */
+async function spawnPiInTerminal(args: {
+  bin: string;
+  argv: string[];
+  cwd: string;
+}): Promise<{ pid?: number }> {
+  const id = randomUUID();
+  const pidPath = path.join(os.tmpdir(), `tick-pi-${id}.pid`);
+  const scriptPath = path.join(os.tmpdir(), `tick-pi-${id}.command`);
+  const argvPart = args.argv.map(shellQuote).join(" ");
+  const command = [
+    "#!/bin/zsh",
+    `cd ${shellQuote(args.cwd)} || exit 1`,
+    `echo $$ > ${shellQuote(pidPath)}`,
+    argvPart
+      ? `exec ${shellQuote(args.bin)} ${argvPart}`
+      : `exec ${shellQuote(args.bin)}`,
+    "",
+  ].join("\n");
+  await writeFile(scriptPath, command, { mode: 0o700 });
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("open", ["-a", "Terminal", scriptPath], {
+      stdio: "ignore",
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`open -a Terminal exited with code ${code}`));
+    });
+  });
+
+  const pid = await pollPidFile(pidPath, 3000);
+  try {
+    await unlink(pidPath);
+  } catch {
+    // best-effort cleanup
+  }
+  return { pid };
+}
+
+/** Launch pi visibly (Terminal on macOS); fall back to detached spawn elsewhere. */
+async function spawnPiVisible(args: {
+  bin: string;
+  argv: string[];
+  cwd: string;
+  env?: Record<string, string>;
+}): Promise<{ pid?: number }> {
+  if (process.platform === "darwin") {
+    try {
+      // env is intentionally not forwarded — Terminal runs the user's login
+      // shell environment; PiAdapter currently passes no env anyway.
+      return await spawnPiInTerminal(args);
+    } catch (err) {
+      console.warn("Terminal launch failed, falling back to detached spawn:", err);
+    }
+  }
+  return spawnPiDetached(args);
+}
+
 export function createAiHost(): AiHost {
   const registry = createAiToolRegistry();
   const sessionIndex = createSessionIndex();
@@ -79,7 +178,7 @@ export function createAiHost(): AiHost {
         }
       },
     },
-    spawnPi: spawnPiDetached,
+    spawnPi: spawnPiVisible,
   });
   return {
     registry,
@@ -143,7 +242,8 @@ export async function launchViaHost(
   if (!(await adapter.detect())) {
     throw new Error(`tool not available: ${input.toolId}`);
   }
-  if (!input.cwd) throw new Error("cwd is required");
+  const cwd = expandUserPath(input.cwd);
+  if (!cwd) throw new Error("cwd is required");
 
   const promptTrim = input.prompt?.trim() ?? "";
   // E3: never invent a default "Todo" label for clipboard delivery
@@ -163,7 +263,7 @@ export async function launchViaHost(
     todoId: input.todoId ?? "",
     title,
     body,
-    cwd: input.cwd,
+    cwd,
   };
   // Reset flag so we only report this launch's write
   host.consumeClipboardFlag();
@@ -194,12 +294,13 @@ export async function resumeViaHost(
   if (!(await adapter.detect())) {
     throw new Error(`tool not available: ${input.toolId}`);
   }
-  if (!input.cwd) throw new Error("cwd is required");
+  const cwd = expandUserPath(input.cwd);
+  if (!cwd) throw new Error("cwd is required");
 
   const ctx: LaunchContext = {
     todoId: input.todoId ?? "",
     title: "resume",
-    cwd: input.cwd,
+    cwd,
     sessionId: input.sessionId,
   };
   const result = await adapter.resume(input.sessionId, ctx);
