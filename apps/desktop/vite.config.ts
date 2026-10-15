@@ -1,28 +1,43 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import electron from "vite-plugin-electron/simple";
 
+const pkgRoot = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
+  // Renderer-only root. Main/preload entries MUST use absolute paths under pkgRoot
+  // so they are not resolved relative to src/renderer.
+  root: path.join(pkgRoot, "src/renderer"),
   plugins: [
     react(),
     electron({
       main: {
-        entry: "src/main/index.ts",
+        entry: path.join(pkgRoot, "src/main/index.ts"),
         vite: {
           build: {
-            outDir: "dist-electron",
+            outDir: path.join(pkgRoot, "dist-electron"),
+            emptyOutDir: false,
             rollupOptions: {
-              external: ["electron"],
+              external: [
+                "electron",
+                /^@earendil-works\//,
+                /^node:/,
+              ],
+              output: {
+                entryFileNames: "main.js",
+              },
             },
           },
         },
       },
       preload: {
-        input: path.join(__dirname, "src/preload/index.ts"),
+        input: path.join(pkgRoot, "src/preload/index.ts"),
         vite: {
           build: {
-            outDir: "dist-electron",
+            outDir: path.join(pkgRoot, "dist-electron"),
+            emptyOutDir: false,
             rollupOptions: {
               external: ["electron"],
               output: {
@@ -37,13 +52,14 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src/renderer"),
-      "@tick/shared": path.resolve(__dirname, "../../packages/shared/src/index.ts"),
+      "@": path.join(pkgRoot, "src/renderer"),
+      "@tick/shared": path.join(pkgRoot, "../../packages/shared/src/index.ts"),
+      "@tick/ai-core": path.join(pkgRoot, "../../packages/ai/core/src/index.ts"),
+      "@tick/ai-pi": path.join(pkgRoot, "../../packages/ai/pi/src/index.ts"),
     },
   },
-  root: path.join(__dirname, "src/renderer"),
   build: {
-    outDir: path.resolve(__dirname, "dist"),
+    outDir: path.join(pkgRoot, "dist"),
     emptyOutDir: true,
   },
 });
