@@ -1,6 +1,6 @@
 {
   "name": "@tick/desktop",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Tick desktop — always-on-top todo panel",
   "main": "dist-electron/main.mjs",

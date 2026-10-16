@@ -1,7 +1,7 @@
 {
   "name": "tick",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Tick — always-on-top desktop todo panel",
   "scripts": {
     "dev": "pnpm --filter @tick/desktop dev",
