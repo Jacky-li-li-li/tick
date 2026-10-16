@@ -1,6 +1,6 @@
 {
   "name": "@tick/desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Tick desktop — always-on-top todo panel",
   "main": "dist-electron/main.mjs",
@@ -68,6 +68,7 @@
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "identity": "Developer ID Application",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": true

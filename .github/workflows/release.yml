@@ -91,6 +91,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+          identities=""
+          while IFS= read -r line; do identities="${identities}${line}%0A"; done < <(security find-identity -v -p codesigning || true)
+          echo "::notice title=keychain 里的签名身份::${identities}"
+
           inspected=0
           failed=0
           for app in apps/desktop/release/mac-*/Tick.app; do
