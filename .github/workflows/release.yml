@@ -179,9 +179,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # latest-mac.yml 是 electron-updater 的应用内更新 feed，*.blockmap 是差量下载用；
+          # 少了它们，应用内检查更新会查不到新版本 / 退化成全量下载
           files: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
+            apps/desktop/release/latest-mac.yml
+            apps/desktop/release/*.blockmap
             apps/desktop/release/SHA256SUMS.txt
           generate_release_notes: true
 
@@ -193,5 +197,7 @@ jobs:
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
+            apps/desktop/release/latest-mac.yml
+            apps/desktop/release/*.blockmap
             apps/desktop/release/SHA256SUMS.txt
           if-no-files-found: error

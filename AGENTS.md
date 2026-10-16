@@ -37,6 +37,7 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - 玻璃面板：窗口是 `frame:false` + macOS `transparent:true` + `vibrancy:'under-window'`（`main/index.ts`，非 macOS 走不透明底色）；renderer 只叠半透明玻璃色，**不要在 `.panel` 上加 `backdrop-filter`**（会与 vibrancy 打架），弹层 `.menu` / `.sheet` 才用 `backdrop-filter` 模糊面板内容
 - Renderer（19 帧设计源见 `docs/ui/`）：顶栏分段 `待办|对话` + `···` 菜单；`features/todos/TodosView`（页内分段 待办/已完成 + 列表 + 添加 + sheets）；`features/list/TodoList`（行 + 竖条数字）；`features/sessions/SessionsSheet`（竖条数字 → 会话列表 → 打开 / 再绑）；`features/editor`（AddTodoRow + TodoEditSheet）；`features/bind-wizard`；`features/chat`；`features/model-config`（整页视图）；`features/common/Sheet`（遮罩 + 弹层，遮罩必须在弹层之下）。旧的 `TodoEditModal`、`ai-picker`、`panel-chat`、`TodoEditor` 已移除
 - 持久化为 Electron userData 下的 JSON：`todos.json`、`cli-sessions.json`、`panel-chat/*.jsonl`；无 SQLite
+- 自动更新走 main 的 `services/update-service.ts`（electron-updater），把回调收敛成 `UpdateState` 状态机；`update:*` IPC + `update:state` 推送面在 preload 的 `update` 组；`autoInstallOnAppQuit` 必须为 true，否则 macOS 上「已下载」是假状态、`quitAndInstall` 会挂住；开发态（未打包）没有 `app-update.yml`，状态是 `unsupported`；`electron-updater` 必须留在 `dependencies`（`app-builder-lib` 靠它判断要不要写 legacy `latest-mac.json`）
 
 ## 发版
 
@@ -92,6 +93,7 @@ cask 的装法必须两段式。仓库名是 `tick` 不是 `homebrew-tick`，而
 - 产物附 `SHA256SUMS.txt`（`shasum -a 256`），随 Release 一起上传
 - 打包后 `extraResources` 把 `apps/desktop/resources` 放到 `Contents/Resources/resources`，main 侧统一走 `assetPath()` 兼容开发态与打包态（asar 内的 `nativeImage.createFromPath` 不可靠）
 - `dist` 脚本带 `--publish never`：CI 环境下 electron-builder 会隐式 publish 去连 GitHub，显式关掉
+- Release 资产里必须带 `latest-mac.yml`（electron-updater 的 feed）和 `*.blockmap`（差量下载），否则应用内更新查不到 / 退化成全量下载
 
 ## 文档
 
