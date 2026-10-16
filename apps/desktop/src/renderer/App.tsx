@@ -5,129 +5,124 @@ import { ModelConfigView } from "./features/model-config/ModelConfigView";
 
 type Tab = "todos" | "chat";
 
+/** 面板外壳（帧 01–08）：玻璃面板 + 顶栏分段 + ··· 菜单 + 模型配置整页视图。 */
 export function App() {
   const [tab, setTab] = useState<Tab>("todos");
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModelConfig, setShowModelConfig] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     void window.tick.window.getAlwaysOnTop().then(setAlwaysOnTop);
   }, []);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   async function togglePin() {
     const next = await window.tick.window.setAlwaysOnTop(!alwaysOnTop);
     setAlwaysOnTop(next);
+    setToast(next ? "已置顶：alwaysOnTop = true" : "已取消置顶");
   }
 
   async function hidePanel() {
     await window.tick.window.hide();
   }
 
-  return (
-    <div className="app">
-      <header className="titlebar">
-        <h1>
-          Tick <span className="title-sub">Todo Panel</span>
-        </h1>
-        <div className="actions">
-          <button
-            className={`icon-btn ${alwaysOnTop ? "active on" : ""}`}
-            type="button"
-            onClick={() => void togglePin()}
-            title="置顶 alwaysOnTop（独立控制）"
-            aria-pressed={alwaysOnTop}
-          >
-            {alwaysOnTop ? "📌 置顶" : "置顶"}
-          </button>
-          <div className="menu-wrap">
-            <button
-              className={`icon-btn ${menuOpen ? "active" : ""}`}
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              title="菜单"
-              aria-expanded={menuOpen}
-            >
-              ⌄ 菜单
-            </button>
-            {menuOpen && (
-              <>
-                <div
-                  className="menu-backdrop"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="dropdown">
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      void togglePin();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <span>置顶</span>
-                    <span className="dropdown-check">
-                      {alwaysOnTop ? "✓" : ""}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      void hidePanel();
-                    }}
-                  >
-                    <span>隐藏面板</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setShowModelConfig(true);
-                    }}
-                  >
-                    <span>模型配置</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+  function openModelConfig() {
+    setMenuOpen(false);
+    setShowModelConfig(true);
+  }
 
+  return (
+    <div className="panel">
       {showModelConfig ? (
-        <main className="content">
-          <ModelConfigView onClose={() => setShowModelConfig(false)} />
-        </main>
+        <ModelConfigView onClose={() => setShowModelConfig(false)} />
       ) : (
         <>
-          <nav className="tabbar" role="tablist">
+          <div className="topbar">
+            <div className="seg">
+              <button
+                type="button"
+                className={tab === "todos" ? "on" : ""}
+                aria-pressed={tab === "todos"}
+                onClick={() => setTab("todos")}
+              >
+                待办
+              </button>
+              <button
+                type="button"
+                className={tab === "chat" ? "on" : ""}
+                aria-pressed={tab === "chat"}
+                onClick={() => setTab("chat")}
+              >
+                对话
+              </button>
+            </div>
             <button
-              role="tab"
-              aria-selected={tab === "todos"}
-              className={`tab ${tab === "todos" ? "active" : ""}`}
+              className={menuOpen ? "icon-btn on" : "icon-btn"}
               type="button"
-              onClick={() => setTab("todos")}
+              title="置顶 / 隐藏 / 模型配置"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
             >
-              待办
+              ···
             </button>
-            <button
-              role="tab"
-              aria-selected={tab === "chat"}
-              className={`tab ${tab === "chat" ? "active" : ""}`}
-              type="button"
-              onClick={() => setTab("chat")}
-            >
-              对话
-            </button>
-          </nav>
-          <main className="content">
-            {tab === "todos" ? <TodosView /> : <ChatView />}
-          </main>
+          </div>
+
+          {tab === "todos" ? (
+            <TodosView />
+          ) : (
+            <ChatView onOpenModelConfig={openModelConfig} />
+          )}
         </>
       )}
+
+      {menuOpen && (
+        <>
+          <div className="scrim" onClick={() => setMenuOpen(false)} />
+          <div className="menu" role="menu">
+            <button
+              className="mi"
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={alwaysOnTop}
+              onClick={() => {
+                setMenuOpen(false);
+                void togglePin();
+              }}
+            >
+              <span>置顶</span>
+              <span className="mark">{alwaysOnTop ? "✓" : ""}</span>
+            </button>
+            <button
+              className="mi"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                void hidePanel();
+              }}
+            >
+              <span>隐藏</span>
+            </button>
+            <button
+              className="mi"
+              type="button"
+              role="menuitem"
+              onClick={openModelConfig}
+            >
+              <span>模型配置</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

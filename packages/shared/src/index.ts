@@ -4,6 +4,8 @@ export interface TodoAiMeta {
   toolId: string;
   sessionId: string;
   cwd: string;
+  /** 绑定时间（列表右侧竖条数字 → 会话列表里显示「今天 / 昨天」） */
+  boundAt?: string;
 }
 
 export interface Todo {

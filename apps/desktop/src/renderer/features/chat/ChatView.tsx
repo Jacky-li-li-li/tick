@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PANEL_SESSION_PREFIX } from "@tick/ai-core";
 import type { ChatHistoryItem, PanelChatSession } from "@tick/shared";
+import { Sheet } from "../common/Sheet";
 
 type Bubble = { who: "you" | "agent" | "system"; text: string };
+
+type Props = {
+  /** 未配置模型时引导卡的「去配置」→ 打开模型配置视图 */
+  onOpenModelConfig: () => void;
+};
 
 function newPanelSessionId(): string {
   return `${PANEL_SESSION_PREFIX}chat-${Date.now().toString(36)}${Math.random()
@@ -10,7 +16,7 @@ function newPanelSessionId(): string {
     .slice(2, 6)}`;
 }
 
-/** 「刚刚 / N 分钟前 / 昨天 / M-D」 for the session list. */
+/** 「刚刚 / N 分钟前 / 昨天 / M-D」 */
 function relTime(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -30,8 +36,8 @@ function toBubbles(items: ChatHistoryItem[]): Bubble[] {
   return items.map((m) => ({ who: m.who, text: m.text }));
 }
 
-/** 「对话」tab — 多会话面板 chat（03/04 帧）。 */
-export function ChatView() {
+/** 「对话」tab（帧 03 / 04 / 06）：会话列表 + 气泡 + 输入。 */
+export function ChatView({ onOpenModelConfig }: Props) {
   const [sessions, setSessions] = useState<PanelChatSession[]>([]);
   const [activeId, setActiveId] = useState<string>("");
   const [histories, setHistories] = useState<Record<string, Bubble[]>>({});
@@ -39,6 +45,8 @@ export function ChatView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [isNew, setIsNew] = useState(false);
+  const [modelReady, setModelReady] = useState(true);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -63,15 +71,21 @@ export function ChatView() {
     }
   }, []);
 
-  // 初始：加载会话列表；选中最近一个，没有就准备一个新会话 id。
+  // 初始：模型状态 + 会话列表；选中最近一个，没有就准备一个新会话 id。
   useEffect(() => {
     void (async () => {
+      try {
+        const status = await window.tick.model.status();
+        setModelReady(!status.isFaux);
+      } catch {
+        setModelReady(false);
+      }
       const list = await refreshSessions();
       setActiveId((cur) => cur || list[0]?.sessionId || newPanelSessionId());
+      if (list.length === 0) setIsNew(true);
     })();
   }, [refreshSessions]);
 
-  // 切换会话：拉历史。
   useEffect(() => {
     if (activeId) void loadHistory(activeId);
   }, [activeId, loadHistory]);
@@ -79,12 +93,14 @@ export function ChatView() {
   const messages = histories[activeId] ?? [];
 
   const currentTitle = useMemo(() => {
+    if (isNew) return "新会话";
     const found = sessions.find((s) => s.sessionId === activeId);
     return found?.title ?? "新会话";
-  }, [sessions, activeId]);
+  }, [sessions, activeId, isNew]);
 
   function newSession() {
     setActiveId(newPanelSessionId());
+    setIsNew(true);
     setListOpen(false);
     setText("");
     setError(null);
@@ -110,7 +126,8 @@ export function ChatView() {
           ],
         ),
       }));
-      void refreshSessions(); // 首条消息后出现标题/时间
+      setIsNew(false);
+      void refreshSessions(); // 首条消息后出现标题 / 时间
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       await loadHistory(activeId);
@@ -120,69 +137,54 @@ export function ChatView() {
   }
 
   return (
-    <section className="card chat-view" data-feature="chat">
-      <div className="chat-top">
+    <>
+      <div className="chead">
         <button
-          className="chat-current"
+          className="icon-btn"
           type="button"
+          title="会话列表"
+          aria-expanded={listOpen}
           onClick={() => {
             setListOpen((v) => !v);
             if (!listOpen) void refreshSessions();
           }}
-          aria-expanded={listOpen}
         >
-          <span className="chat-current-title">{currentTitle}</span>
-          <span className="chat-caret">{listOpen ? "▴" : "▾"}</span>
+          ☰
         </button>
-        <button className="tiny" type="button" onClick={newSession}>
-          ＋ 新会话
-        </button>
+        <span className="chead-title">{currentTitle}</span>
+        <span className="chead-spacer" />
       </div>
 
-      {listOpen && (
-        <div className="chat-session-list">
-          {sessions.map((s) => (
-            <button
-              key={s.sessionId}
-              type="button"
-              className={`chat-session-item ${
-                s.sessionId === activeId ? "active" : ""
-              }`}
-              onClick={() => {
-                setActiveId(s.sessionId);
-                setListOpen(false);
-              }}
-            >
-              <span className="chat-session-name">{s.title}</span>
-              <span className="chat-session-time">{relTime(s.updatedAt)}</span>
+      {!modelReady ? (
+        <div className="chat-guide">
+          <div className="card">
+            <b>先配置 AI 模型</b>
+            <span>还没有可用的模型</span>
+            <br />
+            <button className="cta" type="button" onClick={onOpenModelConfig}>
+              去配置
             </button>
+          </div>
+        </div>
+      ) : (
+        <div className="log">
+          {messages.length === 0 && (
+            <div className="stub">和 AI 说点什么…（可说「建一条 todo：买咖啡豆」）</div>
+          )}
+          {messages.map((m, i) => (
+            <div key={`${activeId}-${i}`} className={m.who === "you" ? "msg me" : "msg ai"}>
+              {m.text}
+            </div>
           ))}
-          {sessions.length === 0 && <div className="stub">还没有会话</div>}
         </div>
       )}
 
-      <div className="chat-log">
-        {messages.length === 0 && (
-          <div className="stub">
-            和 AI 说点什么…（可说「建一条 todo：买咖啡豆」）
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div
-            key={`${activeId}-${i}`}
-            className={`msg-row ${m.who === "you" ? "you" : "agent"}`}
-          >
-            <div className="msg-bubble">{m.text}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="chat-compose">
+      <div className="compose">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="和 AI 说点什么…"
-          disabled={busy}
+          disabled={busy || !modelReady}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -191,16 +193,46 @@ export function ChatView() {
           }}
         />
         <button
-          className="primary sm"
+          className="primary"
           type="button"
           onClick={() => void send()}
-          disabled={!text.trim() || busy}
+          disabled={!text.trim() || busy || !modelReady}
         >
           {busy ? "…" : "发送"}
         </button>
       </div>
 
-      {error && <div className="error">{error}</div>}
-    </section>
+      {listOpen && (
+        <Sheet top onDismiss={() => setListOpen(false)}>
+          {sessions.map((s) => (
+            <button
+              key={s.sessionId}
+              type="button"
+              className={s.sessionId === activeId ? "si selected" : "si"}
+              onClick={() => {
+                setActiveId(s.sessionId);
+                setIsNew(false);
+                setListOpen(false);
+              }}
+            >
+              <span className="si-body">
+                <span className="si-name">{s.title}</span>
+              </span>
+              <span className="si-meta">{relTime(s.updatedAt)}</span>
+            </button>
+          ))}
+          {sessions.length === 0 && (
+            <div className="stub" style={{ padding: "8px 10px" }}>
+              还没有会话
+            </div>
+          )}
+          <button className="si add" type="button" onClick={newSession}>
+            ＋ 新建会话
+          </button>
+        </Sheet>
+      )}
+
+      {error && <div className="toast">{error}</div>}
+    </>
   );
 }

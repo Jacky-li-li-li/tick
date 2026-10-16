@@ -2,24 +2,26 @@ import { useState } from "react";
 import type { Todo } from "@tick/shared";
 
 type Props = {
-  /** Called with the created todo (after refresh) — e.g. to open the bind wizard. */
+  /** 创建成功后回调（父级刷新并进入绑 AI） */
   onCreated: (todo: Todo) => void;
+  /** 列表为空时高亮这一行（帧 14） */
+  guide?: boolean;
 };
 
-/** 「＋ 添加待办 · 回车确认」 row (01/02 帧). */
-export function AddTodoRow({ onCreated }: Props) {
+/** 底部单行添加（帧 01 / 02 / 14）：按钮 → 输入框，回车确认、Esc 取消。 */
+export function AddTodoRow({ onCreated, guide }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    const t = title.trim();
-    if (!t || busy) return;
+    const next = title.trim();
+    if (!next || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const todo = await window.tick.todo.create({ title: t });
+      const todo = await window.tick.todo.create({ title: next });
       setTitle("");
       setOpen(false);
       onCreated(todo);
@@ -31,33 +33,39 @@ export function AddTodoRow({ onCreated }: Props) {
   }
 
   return (
-    <div className="add-row">
-      {open ? (
-        <input
-          autoFocus
-          value={title}
-          placeholder="新待办标题 · 回车确认 · Esc 取消"
-          disabled={busy}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            if (error) setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void submit();
-            }
-            if (e.key === "Escape") {
-              setOpen(false);
-              setTitle("");
-            }
-          }}
-        />
-      ) : (
-        <button className="add-btn" type="button" onClick={() => setOpen(true)}>
-          ＋ 添加待办
-        </button>
-      )}
+    <div className="add">
+      <div className="add-row">
+        {open ? (
+          <input
+            autoFocus
+            value={title}
+            placeholder="新待办标题 · 回车确认 · Esc 取消"
+            disabled={busy}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              }
+              if (e.key === "Escape") {
+                setOpen(false);
+                setTitle("");
+              }
+            }}
+          />
+        ) : (
+          <button
+            className={guide ? "add-btn guide" : "add-btn"}
+            type="button"
+            onClick={() => setOpen(true)}
+          >
+            ＋ 添加待办 · 回车确认
+          </button>
+        )}
+      </div>
       {error && <div className="error">{error}</div>}
     </div>
   );

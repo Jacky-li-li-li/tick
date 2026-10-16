@@ -84,6 +84,8 @@ const api = {
       providerId: string;
       apiKey: string;
     }): Promise<ModelStatus> => ipcRenderer.invoke("model:saveKey", input),
+    clearKey: (providerId: string): Promise<ModelStatus> =>
+      ipcRenderer.invoke("model:clearKey", providerId),
     test: (input: {
       providerId: string;
       apiKey?: string;

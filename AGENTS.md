@@ -29,11 +29,13 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - `ai:launch` / `ai:resume` 的成功状态来自真实 pid，不再硬编码 `ok: true`；macOS 上 Terminal launch 拿不到 pid 视为失败，非 macOS detached spawn 无 TTY 会退出，也会如实报 `ok: false`
 - PiAdapter 把 prompt 写系统剪贴板（`deliverPrompt: 'clipboard'`）；launch 预生成 UUIDv7 session id（`packages/ai/pi/src/session-id.ts` 的 `newCliSessionId`）交给 `pi --session-id` 由 pi 落盘，不做事后捕获
 - macOS 上 launch/resume 经 `open -a Terminal <launch.command>` 在真实终端里可见运行 pi（脚本将 pid 写入 pidfile 回传）；非 macOS 回退 detached spawn——注意：无 TTY 时 pi 会静默退出
-- 面板 `ChatAgentHost` 用 `builtinModels({ credentials })`（`@earendil-works/pi-ai/providers/all`）；凭据经 `PiAuthFileCredentialStore` 读写 pi 的 `~/.pi/agent/auth.json`（**与 pi CLI 共享**）；模型选择存 tick 侧 `model-config.json`（`ModelConfigStore`，不动 pi settings）；`model:*` IPC：status / saveKey / test / setSelected
+- 面板 `ChatAgentHost` 用 `builtinModels({ credentials })`（`@earendil-works/pi-ai/providers/all`）；凭据经 `PiAuthFileCredentialStore` 读写 pi 的 `~/.pi/agent/auth.json`（**与 pi CLI 共享**）；模型选择存 tick 侧 `model-config.json`（`ModelConfigStore`，不动 pi settings）；`model:*` IPC：status / saveKey / clearKey（= `CredentialStore.delete`，登出）/ test / setSelected
+- `model:status` 全量返回 42 个 builtin provider 的完整模型目录（openrouter 393 / vercel-ai-gateway 245 等，**不截断**），模型选择器靠搜索 + 滚动承载；`typesafe` 目录为空（动态目录），这类 provider 选不了模型。注意「已配置」只统计 auth.json 里的凭据，环境变量（如 `MOONSHOT_API_KEY`）提供的 ambient auth 会被 `models.getAvailable()` 选中但不显示为已配置
 - 无可用凭据时 `ChatAgentHost` 回退到 pi-ai 的 `faux` provider，工具调用是正则模拟 stub
-- `todo.ai` 是数组（一个 todo 可绑多个 CLI 会话，按 sessionId 去重；旧的单对象形态在 `TodoStore.load` 自动迁移）
+- `todo.ai` 是数组（一个 todo 可绑多个 CLI 会话，按 sessionId 去重；旧的单对象形态在 `TodoStore.load` 自动迁移）——绑定时 `TodoStore.bindAi` 补 `boundAt`（会话 sheet 显示「今天 / 昨天」）
 - 面板 chat 多会话：`panel-sessions.json` 为 `{conversationId,title,updatedAt}`（旧的 bare-string 自动迁移）；会话标题取首条消息前 16 字；`chat:sessions` 供列表
-- Renderer：`todos`（列表 + 详情展开 + 向导入口）/ `chat`（多会话）/ `bind-wizard` / `model-config` / `editor`（AddTodoRow + TodoEditModal）；旧的 `ai-picker`、`panel-chat`、`TodoEditor` 已移除
+- 玻璃面板：窗口是 `frame:false` + macOS `transparent:true` + `vibrancy:'under-window'`（`main/index.ts`，非 macOS 走不透明底色）；renderer 只叠半透明玻璃色，**不要在 `.panel` 上加 `backdrop-filter`**（会与 vibrancy 打架），弹层 `.menu` / `.sheet` 才用 `backdrop-filter` 模糊面板内容
+- Renderer（19 帧设计源见 `docs/ui/`）：顶栏分段 `待办|对话` + `···` 菜单；`features/todos/TodosView`（页内分段 待办/已完成 + 列表 + 添加 + sheets）；`features/list/TodoList`（行 + 竖条数字）；`features/sessions/SessionsSheet`（竖条数字 → 会话列表 → 打开 / 再绑）；`features/editor`（AddTodoRow + TodoEditSheet）；`features/bind-wizard`；`features/chat`；`features/model-config`（整页视图）；`features/common/Sheet`（遮罩 + 弹层，遮罩必须在弹层之下）。旧的 `TodoEditModal`、`ai-picker`、`panel-chat`、`TodoEditor` 已移除
 - 持久化为 Electron userData 下的 JSON：`todos.json`、`cli-sessions.json`、`panel-chat/*.jsonl`；无 SQLite
 
 ## 文档

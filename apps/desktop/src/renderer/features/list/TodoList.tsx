@@ -1,8 +1,7 @@
-import type { Todo, TodoAiMeta } from "@tick/shared";
-import { useState } from "react";
+import type { Todo } from "@tick/shared";
 
-/** 「今天 / 昨天 / N 天前 / M-D」 label from an ISO time. */
-function dayLabel(iso: string): string {
+/** 「今天 / 昨天 / N 天前 / M-D」 */
+export function dayLabel(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
@@ -15,8 +14,8 @@ function dayLabel(iso: string): string {
   return `${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-/** 「…/Downloads/材料」 — keep the last two path segments. */
-function shortCwd(cwd: string): string {
+/** 「…/Downloads/材料」 — 只留最后两段路径 */
+export function shortCwd(cwd: string): string {
   const parts = cwd.split("/").filter(Boolean);
   if (parts.length <= 2) return cwd;
   return "…/" + parts.slice(-2).join("/");
@@ -24,157 +23,77 @@ function shortCwd(cwd: string): string {
 
 type Props = {
   todos: Todo[];
-  onRefresh: () => Promise<void>;
-  onEdit?: (todo: Todo) => void;
-  /** Open the bind wizard for this todo. */
-  onBind?: (todo: Todo) => void;
+  done: boolean;
+  onToggle: (todo: Todo) => void;
+  onEdit: (todo: Todo) => void;
+  /** 点竖条数字 → 会话列表 sheet */
+  onSessions: (todo: Todo) => void;
 };
 
-export function TodoList({ todos, onRefresh, onEdit, onBind }: Props) {
-  const [showDone, setShowDone] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  /** sessionId currently resuming (disabled state on its row item). */
-  const [resumingId, setResumingId] = useState<string | null>(null);
-
-  const openTodos = todos.filter((t) => t.status === "open");
-  const doneTodos = todos.filter((t) => t.status === "done");
-  const visible = showDone ? [...openTodos, ...doneTodos] : openTodos;
-
-  async function setStatus(id: string, status: "open" | "done") {
-    setError(null);
-    try {
-      await window.tick.todo.setStatus({ id, status });
-      await onRefresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  /** Jump back to a bound session: `pi --session <id>` in a Terminal. */
-  async function resumeSession(meta: TodoAiMeta) {
-    setError(null);
-    setResumingId(meta.sessionId);
-    try {
-      const result = await window.tick.ai.resume({
-        toolId: meta.toolId,
-        sessionId: meta.sessionId,
-        cwd: meta.cwd,
-      });
-      if (!result?.ok) {
-        setError(result?.message ?? "resume 失败（ok=false）");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setResumingId(null);
-    }
+/** 列表（帧 01 / 02）：勾选圈 + 标题 + 次要行 + 右侧竖条数字。 */
+export function TodoList({ todos, done, onToggle, onEdit, onSessions }: Props) {
+  if (todos.length === 0) {
+    return (
+      <div className="empty">
+        {done ? (
+          <>
+            <b>还没有已完成的待办</b>
+            <span>勾选左侧圆圈即可完成，完成只改本地状态</span>
+          </>
+        ) : (
+          <>
+            <b>还没有待办</b>
+            <span>
+              在下方输入标题，回车即可新建
+              <br />
+              新建后会立刻询问是否拉起 AI
+            </span>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
-    <section className="card" data-feature="list">
-      {visible.length === 0 && (
-        <div className="stub">暂无待办，在下方添加。</div>
-      )}
-
-      {visible.map((todo) => {
-        const isDone = todo.status === "done";
-        const expanded = expandedId === todo.id;
-        const aiList = todo.ai ?? [];
+    <div className="list">
+      {todos.map((todo) => {
+        const count = (todo.ai ?? []).length;
+        const meta = done
+          ? dayLabel(todo.updatedAt)
+          : todo.content || (count > 0 ? `${count} 个 AI 会话` : "未绑定 AI");
         return (
-          <div key={todo.id} className={`todo-row-wrap ${expanded ? "expanded" : ""}`}>
-            <div className={`todo-row ${isDone ? "done" : ""}`}>
+          <div key={todo.id} className={done ? "row done" : "row"}>
+            <button
+              className={done ? "tick on" : "tick"}
+              type="button"
+              aria-label={done ? "恢复为未完成" : "标记完成"}
+              onClick={() => onToggle(todo)}
+            >
+              {done ? "✓" : ""}
+            </button>
+            <button
+              className="row-main"
+              type="button"
+              onClick={() => onEdit(todo)}
+              title="编辑待办"
+            >
+              <span className="row-title">{todo.title}</span>
+              <span className="row-meta">{meta}</span>
+            </button>
+            {count > 0 && (
               <button
-                className="tick"
+                className="stack"
                 type="button"
-                aria-label={isDone ? "恢复为未完成" : "标记完成"}
-                onClick={() => void setStatus(todo.id, isDone ? "open" : "done")}
+                onClick={() => onSessions(todo)}
+                title={`${count} 个 AI 会话`}
               >
-                {isDone ? "✓" : ""}
+                <i />
+                <b>{count}</b>
               </button>
-              <button
-                className="todo-main"
-                type="button"
-                onClick={() => setExpandedId(expanded ? null : todo.id)}
-              >
-                <span className="todo-title">{todo.title}</span>
-                <span className="todo-tags">
-                  <span className="time-tag">
-                    {dayLabel(isDone ? todo.updatedAt : todo.createdAt)}
-                  </span>
-                  {aiList.length > 0 && <span className="ai-chip">AI</span>}
-                  {todo.content ? <span className="note-chip">备注</span> : null}
-                </span>
-              </button>
-              <div className="todo-right">
-                {aiList.length > 0 && (
-                  <span className="count-badge" title={`${aiList.length} 个 AI 会话`}>
-                    {aiList.length}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {expanded && (
-              <div className="todo-detail">
-                {todo.content ? (
-                  <div className="todo-content">{todo.content}</div>
-                ) : null}
-
-                {aiList.length > 0 ? (
-                  <div className="session-list">
-                    {aiList.map((meta) => (
-                      <button
-                        key={meta.sessionId}
-                        className="session-item"
-                        type="button"
-                        onClick={() => void resumeSession(meta)}
-                        disabled={resumingId === meta.sessionId}
-                        title="点击跳回该会话（pi --session）"
-                      >
-                        <span
-                          className={`dot ${resumingId === meta.sessionId ? "busy" : "ok"}`}
-                        />
-                        <span className="session-name">
-                          {meta.toolId} · {meta.sessionId.slice(0, 13)}…
-                        </span>
-                        <span className="session-path">{shortCwd(meta.cwd)}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="stub">尚未绑定 AI 会话</div>
-                )}
-
-                <div className="detail-actions">
-                  {onBind && (
-                    <button className="tiny" type="button" onClick={() => onBind(todo)}>
-                      {aiList.length > 0 ? "＋ 再绑一个 AI" : "拉起 AI"}
-                    </button>
-                  )}
-                  {onEdit && (
-                    <button className="tiny" type="button" onClick={() => onEdit(todo)}>
-                      编辑
-                    </button>
-                  )}
-                </div>
-              </div>
             )}
           </div>
         );
       })}
-
-      {doneTodos.length > 0 && (
-        <button
-          className="linkish done-toggle"
-          type="button"
-          onClick={() => setShowDone((v) => !v)}
-        >
-          {showDone ? "收起已完成" : `已完成 ${doneTodos.length} 项`}
-        </button>
-      )}
-
-      {error && <div className="error">{error}</div>}
-    </section>
+    </div>
   );
 }

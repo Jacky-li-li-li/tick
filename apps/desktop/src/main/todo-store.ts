@@ -134,10 +134,16 @@ export class TodoStore {
       throw new Error(`todo not found: ${id}`);
     }
     const current = this.todos[idx];
+    // 绑定时间只记第一次（重复绑定同一 session 时保留原时间）
+    const existingMeta = (current.ai ?? []).find((x) => x.sessionId === ai.sessionId);
+    const meta: TodoAiMeta = {
+      ...ai,
+      boundAt: ai.boundAt ?? existingMeta?.boundAt ?? new Date().toISOString(),
+    };
     const list = [...(current.ai ?? [])];
     const existing = list.findIndex((x) => x.sessionId === ai.sessionId);
-    if (existing >= 0) list[existing] = ai;
-    else list.push(ai);
+    if (existing >= 0) list[existing] = meta;
+    else list.push(meta);
     const next: Todo = {
       ...current,
       ai: list,

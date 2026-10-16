@@ -133,6 +133,9 @@ function registerGlobalShortcuts() {
 
 
 function createWindow() {
+  // 磨砂半透明玻璃面板（docs/ui/UI-LOCK.md）：macOS 用窗口级 vibrancy 把桌面做磨砂，
+  // renderer 只叠一层半透明玻璃色，不再自绘模糊。
+  const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
     width: 360,
     height: 520,
@@ -143,6 +146,9 @@ function createWindow() {
     titleBarStyle: "hidden",
     resizable: true,
     show: false,
+    transparent: isMac,
+    backgroundColor: isMac ? "#00000000" : "#12141a",
+    ...(isMac ? { vibrancy: "under-window" as const, visualEffectState: "active" as const } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -365,6 +371,10 @@ function registerIpc() {
       return chatHost.getModelStatus();
     },
   );
+  ipcMain.handle("model:clearKey", async (_e, providerId: string) => {
+    await chatHost.clearApiKey(providerId);
+    return chatHost.getModelStatus();
+  });
   ipcMain.handle(
     "model:test",
     (_e, input: { providerId: string; apiKey?: string; modelId?: string }) =>

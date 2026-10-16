@@ -238,10 +238,9 @@ export class ChatAgentHost {
     const providers = getBuiltinProviders().map((providerId) => ({
       providerId,
       configured: configured.has(providerId),
-      models: models
-        .getModels(providerId)
-        .map((m) => m.id)
-        .slice(0, 50),
+      // 全量返回目录：openrouter / vercel-ai-gateway 这类有 200~400 个模型，
+      // 截断会让用户选不到后面的模型（UI 侧用搜索 + 滚动承载）。
+      models: models.getModels(providerId).map((m) => m.id),
     }));
     // Configured providers first (stable otherwise).
     providers.sort((a, b) => Number(b.configured) - Number(a.configured));
@@ -285,6 +284,16 @@ export class ChatAgentHost {
     }
   }
 
+  /** Remove the stored credential for a provider (logout). */
+  async clearApiKey(providerId: string): Promise<void> {
+    await this.start();
+    await this.options.credentials.delete(providerId);
+    // 清掉的正好是当前生效的 provider：换到下一个可用模型，或回落 faux。
+    if (this.modelRef.provider === providerId) {
+      await this.refreshModelRef();
+    }
+  }
+
   /** One-shot connectivity probe (optionally with an unsaved key). */
   async testProvider(input: {
     providerId: string;
@@ -300,7 +309,7 @@ export class ChatAgentHost {
     if (!model) {
       return {
         ok: false,
-        message: `未找到 ${input.providerId} 的可用模型（该提供商可能是动态目录）`,
+        message: `${input.providerId} 没有静态模型目录（动态目录），Tick 里暂时选不了模型`,
       };
     }
     const startedAt = Date.now();
