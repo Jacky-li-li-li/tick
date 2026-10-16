@@ -4,7 +4,17 @@ Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板�
 
 当前版本：`v0.1.5`（macOS）。
 
-## 下载安装（macOS）
+## 安装（macOS）
+
+一行装好：拉最新 Release 里对应芯片的 dmg、用 `SHA256SUMS.txt` 校验 sha256、挂载、把 `Tick.app` 拷进 `/Applications`。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jacky-li-li-li/tick/main/scripts/install.sh | sh
+```
+
+脚本就是 [`scripts/install.sh`](scripts/install.sh)，想先看一眼再跑，把 `| sh` 去掉即可。
+
+### 手动下载
 
 从 [Releases](https://github.com/Jacky-li-li-li/tick/releases) 下载对应芯片的安装包：
 
