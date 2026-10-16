@@ -1,5 +1,6 @@
 cask "tick" do
   version "0.1.7"
+  auto_updates true
 
   on_arm do
     sha256 "a78b626c12b28b614a466692ec7198a877e4441f82c2c67ab8b20cf2140a536c"

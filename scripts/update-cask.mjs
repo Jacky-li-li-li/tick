@@ -42,10 +42,15 @@ const asset = (arch) =>
 
 // url 上不写 verified：Homebrew 已废弃这个参数，默认行为就是拿下载地址的域名
 // 跟 homepage 的域名比对，走 github.com 时本来就过。
+//
+// auto_updates：应用自己会更新（面板 ··· 菜单里的 electron-updater）。不声明的话
+// Homebrew 拿 receipt 里的版本跟 cask 版本比，一旦应用自己升过级，`brew outdated`
+// 会一直报过时；更糟的是 cask 还没 bump 时 `brew upgrade` 会把应用降级回去。
 writeFileSync(
   new URL("../Casks/tick.rb", import.meta.url),
   `cask "tick" do
   version "${version}"
+  auto_updates true
 
   on_arm do
     sha256 "${sha256("arm64")}"
