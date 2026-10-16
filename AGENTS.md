@@ -45,6 +45,9 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - 签名 / 公证沿用 `Jacky-li-li-li/Look` 那套：workflow 把 `MAC_CERTS`（.p12 的 base64）导入临时 keychain，`MAC_CERT_PASSWORD` 解密，`APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` 公证；`build.mac.notarize: true`，公证失败重试 3 次。Secrets 是仓库级，tick 仓库要单独建一遍；没配则自动退化成未签名包（README 有 Gatekeeper 放行说明）
 - `build.mac.electronVersion` 写死（CI 下 electron-builder 无法从 `^33.3.1` 这种范围解析出确切版本），升级 electron 时同步改
 - 图标 `apps/desktop/build/icon.png`（1024，electron-builder 转 icns）；entitlements 在 `apps/desktop/build/entitlements.mac.plist`；`build.mac.target` 决定架构
+- `afterPack` 钩子 `apps/desktop/build/after-pack.mjs`：**没有证书时给 .app 做 ad-hoc 签名**（`codesign --force --deep --sign -`），否则 Apple Silicon 上用户下载后会看到「已损坏，无法打开」；有 `MAC_CERTS` / `CSC_LINK` 时跳过，交给 electron-builder 正式签名
+- workflow 里有两道质量闸：`校验产物`（`codesign --verify --strict`、断言 `app.asar` 与 `extraResources` 的托盘图标真的进包、配了证书时 `stapler validate`）和 `启动冒烟`（真启动一次打包产物，抓主进程的 `ready-to-show`）
+- 产物附 `SHA256SUMS.txt`（`shasum -a 256`），随 Release 一起上传
 - 打包后 `extraResources` 把 `apps/desktop/resources` 放到 `Contents/Resources/resources`，main 侧统一走 `assetPath()` 兼容开发态与打包态（asar 内的 `nativeImage.createFromPath` 不可靠）
 - `dist` 脚本带 `--publish never`：CI 环境下 electron-builder 会隐式 publish 去连 GitHub，显式关掉
 - 本机打包要能下载 Electron（github.com）；受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时

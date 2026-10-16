@@ -13,11 +13,13 @@ Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板�
 | Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.0-arm64.dmg` |
 | Intel | `Tick-0.1.0-x64.dmg` |
 
-打开 dmg，把 `Tick.app` 拖进「应用程序」。首次打开会被 Gatekeeper 拦下来（这一版没有 Apple Developer ID，未签名 / 未公证），任选一种放行：
+打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.0-arm64.dmg` 对一下再装。
+
+首次打开会被 Gatekeeper 拦下来（没有 Apple Developer ID 的版本未公证），任选一种放行：
 
 - 右键点 App → 「打开」→ 对话框里再点「打开」（只需一次）
 - 「系统设置 → 隐私与安全性」→ 找到 Tick 的提示 → 「仍要打开」
-- 若提示的是「已损坏，无法打开」（未签名包在 Apple Silicon 上会这样），用命令行去隔离标记后再打开：
+- 若提示的是「已损坏，无法打开」（个别系统对 ad-hoc 签名包也会这样），用命令行去隔离标记后再打开：
   `xattr -dr com.apple.quarantine /Applications/Tick.app`
 
 要彻底消除这一步，需要在仓库 Secrets 里配 Developer ID（见下面「自己打包 / 发版」），配好后用户双击即可打开。

@@ -82,16 +82,44 @@ jobs:
             CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @tick/desktop dist
           fi
 
-      # 配了证书时校验签名 / 公证结果，避免静默产出"签了但没公证"的包
-      - name: 校验签名与公证
-        if: ${{ env.MAC_CERTS != '' }}
+      # 产物校验：签名过的要验签、资源要真的进包（magpie 的做法）
+      - name: 校验产物
         run: |
+          set -euo pipefail
           for app in apps/desktop/release/mac-*/Tick.app; do
             echo "== $app"
             codesign -dv --verbose=2 "$app" 2>&1 | grep -E "Authority|TeamIdentifier|Signature" || true
+            codesign --verify --strict --verbose=2 "$app"
             spctl -a -vvv --type execute "$app" || true
-            xcrun stapler validate "$app" || true
+            [ -f "$app/Contents/Resources/app.asar" ] || { echo "app.asar 缺失"; exit 1; }
+            [ -f "$app/Contents/Resources/resources/tray-icon.png" ] || { echo "托盘图标没进包（extraResources）"; exit 1; }
           done
+          if [ -n "${MAC_CERTS:-}" ]; then
+            for app in apps/desktop/release/mac-*/Tick.app; do xcrun stapler validate "$app"; done
+          fi
+
+      # 真启动一次，抓主进程的 ready-to-show：避免"签过了但打不开"
+      - name: 启动冒烟
+        run: |
+          set -euo pipefail
+          BIN=apps/desktop/release/mac-arm64/Tick.app/Contents/MacOS/Tick
+          "$BIN" --no-sandbox > /tmp/tick-smoke.log 2>&1 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 15); do
+            if grep -q "ready-to-show" /tmp/tick-smoke.log; then ok=1; break; fi
+            kill -0 "$PID" 2>/dev/null || break
+            sleep 2
+          done
+          kill "$PID" 2>/dev/null || true
+          head -40 /tmp/tick-smoke.log
+          [ "$ok" = "1" ] || { echo "面板没起来（日志里没有 ready-to-show）"; exit 1; }
+
+      - name: 生成 SHA256SUMS
+        run: |
+          cd apps/desktop/release
+          shasum -a 256 ./*.dmg ./*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: 上传到 GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -100,6 +128,7 @@ jobs:
           files: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
+            apps/desktop/release/SHA256SUMS.txt
           generate_release_notes: true
 
       - name: 手动触发的产物（Artifacts）
@@ -110,4 +139,5 @@ jobs:
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
+            apps/desktop/release/SHA256SUMS.txt
           if-no-files-found: error
