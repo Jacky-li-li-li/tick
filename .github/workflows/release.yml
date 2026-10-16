@@ -78,7 +78,7 @@ jobs:
           rm $RUNNER_TEMP/cert.p12
 
       # 签名 + 公证都在 electron-builder 里（build.mac.notarize: true）。
-      # 不在这里盲目重试：v0.1.1 把一个确定性失败重试了三次（实测 406 秒），
+      # 不在这里盲目重试：0.1.1 那次把一个确定性失败重试了三次（实测 406 秒），
       # 只是把每次诊断的延迟乘三，还附带三份一样的报错。
       - name: 构建 dmg / zip（arm64 + x64）
         run: |

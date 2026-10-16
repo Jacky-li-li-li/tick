@@ -84,7 +84,7 @@ cask 的装法必须两段式。仓库名是 `tick` 不是 `homebrew-tick`，而
 
 - 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`。本机打包要能下载 Electron（github.com），受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时
 - `scripts/verify-signature.mjs` 是签名闸门：遍历 .app 里每个 Mach-O 读 Authority，区分 `never-touched`（链接器签的，codesign 没碰过）和 `adhoc-resigned`。CI 里排在构建之后、`if: always()` 运行，结果写进 job summary 和 annotation
-- 构建步骤不做盲目重试：v0.1.1 把一个确定性失败重试三次，只是把诊断延迟乘三
+- 构建步骤不做盲目重试：0.1.1 那次发布把一个确定性失败重试三次，只是把诊断延迟乘三
 - `build.mac.electronVersion` 写死（CI 下 electron-builder 无法从 `^33.3.1` 这种范围解析出确切版本），升级 electron 时同步改
 - 图标 `apps/desktop/build/icon.png`（1024，electron-builder 转 icns）；entitlements 在 `apps/desktop/build/entitlements.mac.plist`；`build.mac.target` 决定架构
 - `afterPack` 钩子 `apps/desktop/build/after-pack.mjs`：**没有证书时给 .app 做 ad-hoc 签名**（`codesign --force --deep --sign -`），否则 Apple Silicon 上用户下载后会看到「已损坏，无法打开」；有 `MAC_CERTS` / `CSC_LINK` 时跳过，交给 electron-builder 正式签名

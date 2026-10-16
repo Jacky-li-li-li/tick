@@ -3,7 +3,7 @@
  * 闸门：确认 .app 里每一个 Mach-O 都由 Developer ID 签过。
  *
  * 为什么需要：notarytool 只在几分钟后回一句 "The binary is not signed with a valid
- * Developer ID certificate"，不说是哪一步漏的。2026-10-16 的 v0.1.1 连挂三次就是
+ * Developer ID certificate"，不说是哪一步漏的。2026-10-16 的 0.1.1 连挂三次就是
  * 这样：electron-builder 报了签字成功，产物里 Electron Framework 下面那批二进制
  * 其实还是 adhoc。把这条检查放在签名和公证之间，失败时直接给出文件清单。
  *
