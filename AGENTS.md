@@ -40,14 +40,49 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 
 ## 发版
 
-- 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`
-- 打 tag（`v0.1.0`）触发 `.github/workflows/release.yml`（macos-14：typecheck + test → 构建 → 挂 GitHub Release）；手动 `workflow_dispatch` 只出 Artifacts
-- 打 tag 前两个 `package.json` 的版本要和 tag 对齐（`apps/desktop` 与根各一个），workflow 里「校验 tag 与版本号一致」会挡不一致的情况
-- Homebrew cask 在 `Casks/tick.rb`，指向 Release 里的 dmg。装法必须两段式：`brew tap Jacky-li-li-li/tick https://github.com/Jacky-li-li-li/tick` 再 `brew install --cask Jacky-li-li-li/tick/tick`——仓库名是 `tick` 不是 `homebrew-tick`，而 `brew tap user/repo` 的一段式写法等价于 `user/homebrew-repo`，会找不到。cask 不会自己跟着新版本走：每次发完版跑 `pnpm cask:bump <version>`，它读 Release 上的 `SHA256SUMS.txt` 重新生成整份 cask
-- 一行安装脚本 `scripts/install.sh`：`curl -fsSL https://raw.githubusercontent.com/Jacky-li-li-li/tick/main/scripts/install.sh | sh`。它从 `releases/latest` 的跳转取版本号（不解析 API JSON，也不占 API 速率限制），用 Release 上的 `SHA256SUMS.txt` 校验 sha256，再挂载 dmg 把 `Tick.app` 拷进 `/Applications`。脚本跟着 main 走，改完不用发版。写这个脚本时注意：`${VAR}` 后面跟中文（多字节）时必须加花括号，否则 sh 把多字节字节当成变量名的一部分、报 unbound variable
+### 发版流程
+
+1. 改版本号。`apps/desktop/package.json` 和根 `package.json` 两处都要改，且必须和 tag 一致；workflow 的第一步「校验 tag 与版本号一致」会挡不一致的情况。
+2. 提交、打 tag、推。
+   ```bash
+   git add package.json apps/desktop/package.json
+   git commit -m "chore(release): 版本推到 0.1.6"
+   git tag v0.1.6
+   git push origin main && git push origin v0.1.6
+   ```
+3. 等 CI。`.github/workflows/release.yml` 在 macos-14 上依次跑：typecheck 与 test → 导入证书 → 构建 dmg 与 zip → 签名闸门 → 校验产物 → 启动冒烟 → 生成 SHA256SUMS → 挂 GitHub Release。全绿才算出了包。
+4. 对齐 Homebrew cask：`pnpm cask:bump <version>`。它读 Release 上的 `SHA256SUMS.txt` 重新生成整份 `Casks/tick.rb`，避免手抄 sha256。cask 不会自己跟着新版本走，这一步别漏。
+5. 用安装脚本验一次，确认拿到的是新版本号。
+
+手动触发（`workflow_dispatch`）只出 Artifacts，不发 Release。
+
+### 用户怎么装
+
+```bash
+# 一行（推荐）
+curl -fsSL https://raw.githubusercontent.com/Jacky-li-li-li/tick/main/scripts/install.sh | sh
+
+# Homebrew
+brew tap Jacky-li-li-li/tick https://github.com/Jacky-li-li-li/tick
+brew install --cask Jacky-li-li-li/tick/tick
+
+# 手动
+open https://github.com/Jacky-li-li-li/tick/releases/latest
+```
+
+`scripts/install.sh` 从 `releases/latest` 的跳转取版本号（不解析 API JSON，也不占 API 速率限制），用 Release 上的 `SHA256SUMS.txt` 校验 sha256，再挂载 dmg 把 `Tick.app` 拷进 `/Applications`。它跟着 main 走，改完不用发版。写它的时候注意 `${VAR}` 后面跟中文必须加花括号，否则 sh 把多字节字节当成变量名的一部分、报 unbound variable。
+
+cask 的装法必须两段式。仓库名是 `tick` 不是 `homebrew-tick`，而 `brew tap user/repo` 的一段式写法等价于 `user/homebrew-repo`，会找不到仓库。
+
+### 签名与公证
+
 - 签名 / 公证沿用 `Jacky-li-li-li/Look` 那套：workflow 把 `MAC_CERTS`（.p12 的 base64）导入临时 keychain，`MAC_CERT_PASSWORD` 解密，`APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` 公证；`build.mac.notarize: true`。Secrets 是仓库级，tick 仓库要单独建一遍；没配则自动退化成未签名包（README 有 Gatekeeper 放行说明）
 - **`MAC_CERTS` 必须只含 Developer ID 身份**。本机这台的分布是：Developer ID 的**证书在 `/Library/Keychains/System.keychain`**，私钥在 login 钥匙串；而 Apple Development（免费开发证书）的证书和私钥都在 login 钥匙串。所以 `security export -k login.keychain-db -t identities` 导出来的 p12 只有开发证书那一对。造 p12 的正确过程是：先 `security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k <login 密码> -t private` 放开 login 里私钥的 ACL（否则 `security export` 报 `An invalid key was encountered` 并整体中断），再 `security export -t privKeys` 单独导私钥，最后和系统钥匙串里的 `Developer ID Application` 证书及 `Developer ID Certification Authority` 中间证书拼进一个临时钥匙串，从那个钥匙串 `security export -t identities` 导出。验证办法是把它导进一个全新隔离钥匙串，`security find-identity -v -p codesigning <keychain>` 应该**恰好报出一个** `Developer ID Application` 身份
 - 为什么必须只含 Developer ID：`app-builder-lib/out/codeSign/macCodeSign.js` 在找不到 Developer ID 身份时会走一个「挑第一个非 Apple 证书」的兜底分支，而它的 `appleCertificatePrefixes` 里没有 `Apple Development:`，于是免费开发证书会被当成自定义证书签掉整包，公证再回一句 `not signed with a valid Developer ID certificate`。`mac.identity: "Developer ID Application"` 就是用来把这个歧义钉死
+
+### 配置与质量闸
+
+- 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`。本机打包要能下载 Electron（github.com），受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时
 - `scripts/verify-signature.mjs` 是签名闸门：遍历 .app 里每个 Mach-O 读 Authority，区分 `never-touched`（链接器签的，codesign 没碰过）和 `adhoc-resigned`。CI 里排在构建之后、`if: always()` 运行，结果写进 job summary 和 annotation
 - 构建步骤不做盲目重试：v0.1.1 把一个确定性失败重试三次，只是把诊断延迟乘三
 - `build.mac.electronVersion` 写死（CI 下 electron-builder 无法从 `^33.3.1` 这种范围解析出确切版本），升级 electron 时同步改
@@ -57,7 +92,6 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - 产物附 `SHA256SUMS.txt`（`shasum -a 256`），随 Release 一起上传
 - 打包后 `extraResources` 把 `apps/desktop/resources` 放到 `Contents/Resources/resources`，main 侧统一走 `assetPath()` 兼容开发态与打包态（asar 内的 `nativeImage.createFromPath` 不可靠）
 - `dist` 脚本带 `--publish never`：CI 环境下 electron-builder 会隐式 publish 去连 GitHub，显式关掉
-- 本机打包要能下载 Electron（github.com）；受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时
 
 ## 文档
 
