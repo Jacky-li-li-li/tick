@@ -42,7 +42,8 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 
 - 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`
 - 打 tag（`v0.1.0`）触发 `.github/workflows/release.yml`（macos-14：typecheck + test → 构建 → 挂 GitHub Release）；手动 `workflow_dispatch` 只出 Artifacts
-- 签名 / 公证靠仓库 Secrets：`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID`；未配置时 workflow 设 `CSC_IDENTITY_AUTO_DISCOVERY=false`，产出未签名包（README 有 Gatekeeper 放行说明）
+- 签名 / 公证沿用 `Jacky-li-li-li/Look` 那套：workflow 把 `MAC_CERTS`（.p12 的 base64）导入临时 keychain，`MAC_CERT_PASSWORD` 解密，`APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` 公证；`build.mac.notarize: true`，公证失败重试 3 次。Secrets 是仓库级，tick 仓库要单独建一遍；没配则自动退化成未签名包（README 有 Gatekeeper 放行说明）
+- `build.mac.electronVersion` 写死（CI 下 electron-builder 无法从 `^33.3.1` 这种范围解析出确切版本），升级 electron 时同步改
 - 图标 `apps/desktop/build/icon.png`（1024，electron-builder 转 icns）；entitlements 在 `apps/desktop/build/entitlements.mac.plist`；`build.mac.target` 决定架构
 - 打包后 `extraResources` 把 `apps/desktop/resources` 放到 `Contents/Resources/resources`，main 侧统一走 `assetPath()` 兼容开发态与打包态（asar 内的 `nativeImage.createFromPath` 不可靠）
 - `dist` 脚本带 `--publish never`：CI 环境下 electron-builder 会隐式 publish 去连 GitHub，显式关掉

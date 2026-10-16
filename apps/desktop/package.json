@@ -36,6 +36,7 @@
   "build": {
     "appId": "com.jackyli.tick",
     "productName": "Tick",
+    "electronVersion": "33.4.11",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -67,7 +68,8 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     },
     "dmg": {
       "title": "Tick ${version}"

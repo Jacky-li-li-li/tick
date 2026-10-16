@@ -166,7 +166,17 @@ pnpm --filter @tick/desktop dist:dir   # 只出 .app，不压 dmg（本地调试
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-签名 / 公证：在仓库 Secrets 里配 `CSC_LINK`（Developer ID Application 证书 .p12 的 base64）、`CSC_KEY_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，workflow 会自动签名 + 公证，用户双击即可打开；不配就产出未签名包（见上面的 Gatekeeper 说明）。
+签名 / 公证沿用 `Jacky-li-li-li/Look` 项目那套（Secrets 名字保持一致，值取自同一份 Developer ID 证书）。Secrets 是**仓库级**的，需要在 tick 仓库再建一次（值抄 Look 用的那份）：
+
+| Secret | 内容 |
+|--------|------|
+| `MAC_CERTS` | Developer ID Application 证书 `.p12` 的 base64：Keychain Access → 选中「证书 + 私钥」→ 导出 `.p12` → `base64 -i 证书.p12 \| pbcopy` |
+| `MAC_CERT_PASSWORD` | 导出 `.p12` 时设置的密码 |
+| `APPLE_ID` | 公证用的 Apple ID |
+| `APPLE_APP_SPECIFIC_PASSWORD` | 在 appleid.apple.com 生成的 App-Specific 密码 |
+| `APPLE_TEAM_ID` | Apple Developer Team ID（10 位） |
+
+配齐后 CI 会把证书导入临时 keychain，由 electron-builder 签名 + 公证（`build.mac.notarize: true`，公证偶发超时自动重试 3 次），产物即可双击打开；没配则自动退化为未签名包，走上面的 Gatekeeper 放行。
 
 > 本机打包需要能访问 `github.com` 下载 Electron 运行时。网络受限时可复用已装的 Electron：
 > `./node_modules/.bin/electron-builder --mac --dir -c.electronDist=<repo>/node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist`

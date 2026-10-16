@@ -2,6 +2,16 @@ name: release
 
 # 打 tag（v0.1.0 这种）→ 构建 macOS 安装包并挂到 GitHub Release；
 # 手动 workflow_dispatch → 只构建，产物作为 Artifacts 下载（不建 Release）。
+#
+# 签名 / 公证沿用 Jacky-li-li-li/Look 那套 Secrets（名字保持一致，值从同一份证书来）：
+#   MAC_CERTS                    Developer ID Application 证书 .p12 的 base64
+#                               导出：Keychain Access → 选中证书+私钥 → 导出 .p12 →
+#                               base64 -i 证书.p12 | pbcopy → 粘到 Secret
+#   MAC_CERT_PASSWORD            导出 .p12 时设置的密码
+#   APPLE_ID                     公证用 Apple ID
+#   APPLE_APP_SPECIFIC_PASSWORD  appleid.apple.com 生成的 App-Specific 密码
+#   APPLE_TEAM_ID                Apple Developer Team ID（10 位）
+# 没配也能跑：自动退化成未签名包（README 有首次打开放行说明）。
 on:
   push:
     tags: ["v*"]
@@ -14,13 +24,15 @@ jobs:
   mac:
     runs-on: macos-14
     env:
-      # 没有签名证书时不要自动发现，避免构建因找不到 identity 失败。
-      # 配了下面的 Secrets 时 electron-builder 仍会用它签名 + 公证。
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      MAC_CERTS: ${{ secrets.MAC_CERTS }}
+      MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
-      # 版本从 package.json 的 packageManager 读；这里不要再传 version，否则 action 报「多个 pnpm 版本」
+      # 版本从 package.json 的 packageManager 读；不要再传 version，否则 action 报「多个 pnpm 版本」
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -32,15 +44,54 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+      # 与 Look 一致：证书导入临时 keychain，electron-builder 自动发现并签名 + 公证
+      - name: 导入 macOS 签名证书
+        if: ${{ env.MAC_CERTS != '' }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$MAC_CERTS" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -P "$MAC_CERTS_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          rm $RUNNER_TEMP/cert.p12
+
+      # 签名 + 公证都在 electron-builder 里（build.mac.notarize: true）；
+      # 公证偶发超时，按 Look 的做法重试 3 次
       - name: 构建 dmg / zip（arm64 + x64）
-        run: pnpm --filter @tick/desktop dist
-        env:
-          # 可选：配了这组 Secrets 就会自动签名 + 公证，没配则产出未签名包
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$MAC_CERTS" ]; then
+            ok=0
+            for i in 1 2 3; do
+              if pnpm --filter @tick/desktop dist; then ok=1; break; fi
+              echo "第 $i 次失败，10s 后重试…"
+              sleep 10
+            done
+            if [ "$ok" != "1" ]; then
+              echo "electron-builder 连续 3 次失败"
+              exit 1
+            fi
+          else
+            echo "::warning::未配置 MAC_CERTS，产出未签名包（用户首次打开需按 README 放行）"
+            CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @tick/desktop dist
+          fi
+
+      # 配了证书时校验签名 / 公证结果，避免静默产出"签了但没公证"的包
+      - name: 校验签名与公证
+        if: ${{ env.MAC_CERTS != '' }}
+        run: |
+          for app in apps/desktop/release/mac-*/Tick.app; do
+            echo "== $app"
+            codesign -dv --verbose=2 "$app" 2>&1 | grep -E "Authority|TeamIdentifier|Signature" || true
+            spctl -a -vvv --type execute "$app" || true
+            xcrun stapler validate "$app" || true
+          done
 
       - name: 上传到 GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
