@@ -964,6 +964,23 @@ textarea.ctl:focus {
   line-height: 1.5;
 }
 
+/* 自动更新进度条（UpdateSheet）：轨道 + accent 填充 */
+.prog {
+  height: 6px;
+  margin: 8px 0 2px;
+  border-radius: var(--r-ctl);
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.prog i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
 .error {
   display: flex;
   gap: 8px;

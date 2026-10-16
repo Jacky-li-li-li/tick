@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
+import type { UpdateState } from "@tick/shared";
 import { TodosView } from "./features/todos/TodosView";
 import { ChatView } from "./features/chat/ChatView";
 import { ModelConfigView } from "./features/model-config/ModelConfigView";
+import { useUpdateState } from "./features/update/useUpdateState";
+import { UpdateSheet } from "./features/update/UpdateSheet";
 
 type Tab = "todos" | "chat";
+
+/** 菜单项文案随更新状态走：要让用户不打开 sheet 也能看到「有事可做」。 */
+function updateMenuLabel(state: UpdateState | null): { label: string; mark: string } {
+  if (!state) return { label: "检查更新", mark: "" };
+  switch (state.status) {
+    case "available":
+      return { label: `版本 ${state.version}`, mark: "•" };
+    case "downloading":
+      return { label: `下载中 ${state.percent}%`, mark: "" };
+    case "ready":
+      return { label: "重启以更新", mark: "•" };
+    default:
+      return { label: "检查更新", mark: "" };
+  }
+}
 
 /** 面板外壳（帧 01–08）：玻璃面板 + 顶栏分段 + ··· 菜单 + 模型配置整页视图。 */
 export function App() {
@@ -11,7 +29,10 @@ export function App() {
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModelConfig, setShowModelConfig] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const updater = useUpdateState();
+  const updateLabel = updateMenuLabel(updater.state);
 
   useEffect(() => {
     void window.tick.window.getAlwaysOnTop().then(setAlwaysOnTop);
@@ -66,7 +87,7 @@ export function App() {
             <button
               className={menuOpen ? "icon-btn on" : "icon-btn"}
               type="button"
-              title="置顶 / 隐藏 / 模型配置"
+              title="置顶 / 隐藏 / 模型配置 / 检查更新"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
             >
@@ -118,8 +139,30 @@ export function App() {
             >
               <span>模型配置</span>
             </button>
+            <button
+              className="mi"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                setShowUpdate(true);
+              }}
+            >
+              <span>{updateLabel.label}</span>
+              <span className="mark">{updateLabel.mark}</span>
+            </button>
           </div>
         </>
+      )}
+
+      {showUpdate && (
+        <UpdateSheet
+          state={updater.state}
+          onCheck={() => void updater.check()}
+          onDownload={() => void updater.download()}
+          onInstall={() => void updater.install()}
+          onClose={() => setShowUpdate(false)}
+        />
       )}
 
       {toast && <div className="toast">{toast}</div>}
