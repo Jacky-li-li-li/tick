@@ -1,8 +1,31 @@
 # Tick
 
-Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo）。
+Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板视觉是磨砂半透明玻璃（设计源在 `docs/ui/`）。
 
-P0 目标：打开一个小窗口，完成本地 Todo 的增删改查与完成状态切换（软完成）。
+当前版本：`v0.1.0`（macOS）。
+
+## 下载安装（macOS）
+
+从 [Releases](https://github.com/Jacky-li-li-li/tick/releases) 下载对应芯片的安装包：
+
+| 机器 | 文件 |
+|------|------|
+| Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.0-arm64.dmg` |
+| Intel | `Tick-0.1.0-x64.dmg` |
+
+打开 dmg，把 `Tick.app` 拖进「应用程序」。首次打开会被 Gatekeeper 拦下来（这一版没有 Apple Developer ID，未签名 / 未公证），任选一种放行：
+
+- 右键点 App → 「打开」→ 对话框里再点「打开」（只需一次）
+- 「系统设置 → 隐私与安全性」→ 找到 Tick 的提示 → 「仍要打开」
+- 若提示的是「已损坏，无法打开」（未签名包在 Apple Silicon 上会这样），用命令行去隔离标记后再打开：
+  `xattr -dr com.apple.quarantine /Applications/Tick.app`
+
+要彻底消除这一步，需要在仓库 Secrets 里配 Developer ID（见下面「自己打包 / 发版」），配好后用户双击即可打开。
+
+使用前提：
+
+- AI 功能依赖本机已安装的 `pi` CLI；检测不到时「绑 AI」里不会列出该工具
+- 面板对话需要先在面板里点「··· → 模型配置」填 API Key（Key 只存本机 pi 的 `~/.pi/agent/auth.json`，与 pi CLI 共享）
 
 ## Monorepo 结构
 
@@ -63,7 +86,12 @@ Todo 模型（`@tick/shared`）：
   status: 'open' | 'done'
   createdAt: string
   updatedAt: string
-  ai?: { toolId: string; sessionId: string; cwd: string }
+  ai?: {
+    toolId: string
+    sessionId: string
+    cwd: string
+    boundAt?: string   // 绑定时间（会话列表显示「今天 / 昨天」）
+  }[]
 }
 ```
 
@@ -109,7 +137,7 @@ Todo 模型（`@tick/shared`）：
 - 置顶切换在面板 titlebar chrome 内（非设置页）
 - 面板内编辑器新建 Todo（title 必填）
 - `ai:*` / `session:*` / `chat:*` 通道已接通（launch / resume / chat 为真实实现）
-- Renderer features：`list`、`editor`、`ai-picker`、`panel-chat`
+- Renderer features：`todos`（列表 + 分段 + 添加）、`list`（行 + 竖条数字）、`sessions`（会话 sheet）、`editor`（AddTodoRow / TodoEditSheet）、`bind-wizard`、`chat`、`model-config`、`common`（遮罩 + 弹层）
 
 已接 AI 包（本地）：
 
@@ -123,6 +151,25 @@ Todo 模型（`@tick/shared`）：
 - `todo:get` / `session:bind` / `session:get`（无 UI，仅 IPC 与 QA）
 - 窗口位置记忆（F1）、新建 Todo 快捷键
 - 飞书 / Feishu（明确不做）
+
+## 自己打包 / 发版
+
+```bash
+pnpm install
+pnpm --filter @tick/desktop dist       # 产出 apps/desktop/release/*.dmg + *.zip（arm64 + x64）
+pnpm --filter @tick/desktop dist:dir   # 只出 .app，不压 dmg（本地调试更快）
+```
+
+打 tag 会触发 `.github/workflows/release.yml`：跑 typecheck + test，构建两个架构的 dmg/zip，挂到 GitHub Release。
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+签名 / 公证：在仓库 Secrets 里配 `CSC_LINK`（Developer ID Application 证书 .p12 的 base64）、`CSC_KEY_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，workflow 会自动签名 + 公证，用户双击即可打开；不配就产出未签名包（见上面的 Gatekeeper 说明）。
+
+> 本机打包需要能访问 `github.com` 下载 Electron 运行时。网络受限时可复用已装的 Electron：
+> `./node_modules/.bin/electron-builder --mac --dir -c.electronDist=<repo>/node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist`
 
 ## License
 

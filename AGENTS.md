@@ -38,6 +38,16 @@ pnpm workspace（Node ≥20，pnpm）。Electron 桌面应用 + AI Adapter 包�
 - Renderer（19 帧设计源见 `docs/ui/`）：顶栏分段 `待办|对话` + `···` 菜单；`features/todos/TodosView`（页内分段 待办/已完成 + 列表 + 添加 + sheets）；`features/list/TodoList`（行 + 竖条数字）；`features/sessions/SessionsSheet`（竖条数字 → 会话列表 → 打开 / 再绑）；`features/editor`（AddTodoRow + TodoEditSheet）；`features/bind-wizard`；`features/chat`；`features/model-config`（整页视图）；`features/common/Sheet`（遮罩 + 弹层，遮罩必须在弹层之下）。旧的 `TodoEditModal`、`ai-picker`、`panel-chat`、`TodoEditor` 已移除
 - 持久化为 Electron userData 下的 JSON：`todos.json`、`cli-sessions.json`、`panel-chat/*.jsonl`；无 SQLite
 
+## 发版
+
+- 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`
+- 打 tag（`v0.1.0`）触发 `.github/workflows/release.yml`（macos-14：typecheck + test → 构建 → 挂 GitHub Release）；手动 `workflow_dispatch` 只出 Artifacts
+- 签名 / 公证靠仓库 Secrets：`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID`；未配置时 workflow 设 `CSC_IDENTITY_AUTO_DISCOVERY=false`，产出未签名包（README 有 Gatekeeper 放行说明）
+- 图标 `apps/desktop/build/icon.png`（1024，electron-builder 转 icns）；entitlements 在 `apps/desktop/build/entitlements.mac.plist`；`build.mac.target` 决定架构
+- 打包后 `extraResources` 把 `apps/desktop/resources` 放到 `Contents/Resources/resources`，main 侧统一走 `assetPath()` 兼容开发态与打包态（asar 内的 `nativeImage.createFromPath` 不可靠）
+- `dist` 脚本带 `--publish never`：CI 环境下 electron-builder 会隐式 publish 去连 GitHub，显式关掉
+- 本机打包要能下载 Electron（github.com）；受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时
+
 ## 文档
 
 - 产品需求：`docs/已对齐/PRD-tick.md`

@@ -10,6 +10,7 @@ import {
   type OpenDialogOptions,
 } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type {
   AiLaunchInput,
@@ -101,9 +102,16 @@ function refreshTrayMenu() {
   );
 }
 
+/** 资源文件：开发态在 apps/desktop/resources，打包后走 extraResources（Contents/Resources）。 */
+function assetPath(rel: string): string {
+  const bundled = path.join(__dirname, "..", rel);
+  if (fs.existsSync(bundled)) return bundled;
+  return path.join(process.resourcesPath, rel);
+}
+
 function createTray() {
   if (tray) return;
-  const iconPath = path.join(__dirname, "../resources/tray-icon.png");
+  const iconPath = assetPath("resources/tray-icon.png");
   let icon = nativeImage.createFromPath(iconPath);
   if (icon.isEmpty()) {
     // Fallback 16x16 indigo pixel so Linux trays still get a real image

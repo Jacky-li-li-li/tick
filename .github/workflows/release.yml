@@ -1,0 +1,63 @@
+name: release
+
+# 打 tag（v0.1.0 这种）→ 构建 macOS 安装包并挂到 GitHub Release；
+# 手动 workflow_dispatch → 只构建，产物作为 Artifacts 下载（不建 Release）。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-14
+    env:
+      # 没有签名证书时不要自动发现，避免构建因找不到 identity 失败。
+      # 配了下面的 Secrets 时 electron-builder 仍会用它签名 + 公证。
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: 构建 dmg / zip（arm64 + x64）
+        run: pnpm --filter @tick/desktop dist
+        env:
+          # 可选：配了这组 Secrets 就会自动签名 + 公证，没配则产出未签名包
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: 上传到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+          generate_release_notes: true
+
+      - name: 手动触发的产物（Artifacts）
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tick-macos
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+          if-no-files-found: error

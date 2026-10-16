@@ -1,12 +1,13 @@
 {
   "name": "tick",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Tick — always-on-top desktop todo panel",
   "scripts": {
     "dev": "pnpm --filter @tick/desktop dev",
     "build": "pnpm --filter @tick/desktop build",
     "desktop": "pnpm --filter @tick/desktop dev",
+    "dist": "pnpm --filter @tick/desktop dist",
     "typecheck": "pnpm -r typecheck",
     "test": "tsx packages/ai/core/test/session-policy.test.mts && tsx packages/ai/pi/test/session-id.test.mts && tsx packages/ai/pi/test/pi-adapter.test.mts && tsx apps/desktop/test/resume-target.test.mts && node packages/ai/pi/test/argv.test.mjs"
   },
