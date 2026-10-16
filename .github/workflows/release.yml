@@ -81,7 +81,6 @@ jobs:
       - name: 签名闸门（诊断）
         if: always()
         run: |
-          set -o pipefail
           {
             echo "### keychain 里 electron-builder 能看到的身份"
             echo '```'
@@ -97,12 +96,23 @@ jobs:
           for app in apps/desktop/release/mac-*/Tick.app; do
             [ -d "$app" ] || continue
             inspected=$((inspected + 1))
-            node scripts/verify-signature.mjs "$app" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || failed=1
+            if node scripts/verify-signature.mjs "$app" > /tmp/sign-gate.txt 2>&1; then
+              cat /tmp/sign-gate.txt >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            failed=1
+            cat /tmp/sign-gate.txt >> "$GITHUB_STEP_SUMMARY"
+            # job summary 只有网页能看，日志要鉴权才能下载。annotation 在运行页和
+            # commit 页都能直接看到，也是 CI 之外的程序唯一能读到的出口。
+            body=""
+            while IFS= read -r line; do body="${body}${line}%0A"; done < /tmp/sign-gate.txt
+            echo "::error title=签名闸门::${body}"
           done
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$inspected" = 0 ]; then
             echo "没有找到 .app：构建没走到打包阶段" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=签名闸门::没有找到 .app，构建没走到打包阶段"
             exit 1
           fi
           exit "$failed"
