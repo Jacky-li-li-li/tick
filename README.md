@@ -18,8 +18,11 @@ Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板�
 ### Homebrew
 
 ```bash
+brew tap Jacky-li-li-li/tick https://github.com/Jacky-li-li-li/tick
 brew install --cask Jacky-li-li-li/tick/tick
 ```
+
+tap 必须写成两段式：仓库名是 `tick` 而不是 `homebrew-tick`，而 `brew tap user/repo` 这种一段式写法会去找 `user/homebrew-repo`，在这里会失败。升级用 `brew upgrade --cask tick`。
 
 cask 文件在 [`Casks/tick.rb`](Casks/tick.rb)，指向的是 Release 里的 dmg。它不会自己跟着新版本走，每次发完版跑一次下面这条重新对齐版本号和 sha256（它会去读 Release 上的 `SHA256SUMS.txt`）：
 
