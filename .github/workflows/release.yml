@@ -20,9 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 版本从 package.json 的 packageManager 读；这里不要再传 version，否则 action 报「多个 pnpm 版本」
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
