@@ -84,7 +84,7 @@ cask 的装法必须两段式。仓库名是 `tick` 不是 `homebrew-tick`，而
 ### 配置与质量闸
 
 - 本地出包：`pnpm --filter @tick/desktop dist`（dmg + zip，arm64/x64）→ `apps/desktop/release/`（已 gitignore）；`dist:dir` 只出 `.app`。本机打包要能下载 Electron（github.com），受限时用 `-c.electronDist=<本地 electron/dist>` 复用已装运行时
-- 本机（这台 Mac）的 CLI 出网必须显式设代理。系统代理开着（`127.0.0.1:7897`），但 curl / brew / node 只认环境变量、不读 macOS 系统代理；而 DNS 给到的 `github.com`（20.205.243.166）连不通，于是 curl 会停在 SYN_SENT、brew 会静默挂住。跑 `brew install` / `cask:bump` / 任何要下产物的命令前先 `export HTTPS_PROXY=http://127.0.0.1:7897`（连 `http_proxy` / `ALL_PROXY` 一起设上更省事）。直连约 40 KB/s 且经常中断，走代理约 1.6 MB/s。`git` 偶尔能直连成功，别被它误导
+- 本机（这台 Mac）的 CLI 出网必须显式设代理。系统代理开着（`127.0.0.1:7897`），但 curl / brew / node 只认环境变量、不读 macOS 系统代理；而 DNS 给到的 `github.com`（20.205.243.166）连不通，于是 curl 会停在 SYN_SENT、brew 会静默挂住。跑 `brew install` / `cask:bump` / 任何要下产物的命令前先 `export HTTPS_PROXY=http://127.0.0.1:7897`（连 `http_proxy` / `ALL_PROXY` 一起设上更省事）。node 的内置 fetch 还要额外 `NODE_USE_ENV_PROXY=1` 才会读环境变量，否则 `cask:bump` 照样 fetch failed。直连约 40 KB/s 且经常中断，走代理约 1.6 MB/s。`git` 偶尔能直连成功，别被它误导。注意代理出口 IP 是共用的：`api.github.com` 走代理会撞 429，那个走直连
 - `scripts/verify-signature.mjs` 是签名闸门：遍历 .app 里每个 Mach-O 读 Authority，区分 `never-touched`（链接器签的，codesign 没碰过）和 `adhoc-resigned`。CI 里排在构建之后、`if: always()` 运行，结果写进 job summary 和 annotation
 - 构建步骤不做盲目重试：0.1.1 那次发布把一个确定性失败重试三次，只是把诊断延迟乘三
 - `build.mac.electronVersion` 写死（CI 下 electron-builder 无法从 `^33.3.1` 这种范围解析出确切版本），升级 electron 时同步改
