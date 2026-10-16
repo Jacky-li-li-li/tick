@@ -109,7 +109,7 @@ tick/
 ├── packages/
 │   ├── shared/                  # 类型 + IPC 视图类型
 │   ├── ai/
-│   │   ├── core/                # Registry · SessionIndex · 投递 · 会话隔离策略
+│   │   ├── core/                # Registry · 投递 · 会话命名空间（CliSessionId / PanelSessionKey）
 │   │   └── pi/                  # PiAdapter（cwd · clipboard · spawn · resume）
 │   └── storage/                 # 可选（未落地）
 ├── scripts/install.sh           # 发布安装通道（P1）
@@ -134,7 +134,7 @@ tick/
 | AiToolRegistry | ai/core | detect、列出 adapters |
 | AiLaunchService | main | 组装 LaunchContext → adapter |
 | PiAdapter | ai/pi | cwd、clipboard、spawn、resume |
-| SessionIndex | ai/core | toolId+sessionId+todoId |
+| SessionIndex | ai/core | 已删除。会话索引由 Main 的 `SessionStore`（`cli-sessions.json`）单一持有 |
 
 ---
 
@@ -151,15 +151,17 @@ interface AiToolAdapter {
     listSessions: boolean
   }
   launch(ctx: LaunchContext): Promise<LaunchResult>
-  resume(sessionId: string, ctx: LaunchContext): Promise<LaunchResult>
+  resume(sessionId: CliSessionId, ctx: LaunchContext): Promise<LaunchResult>
 }
 
-LaunchResult = { toolId, sessionId, cwd, pid? }
+LaunchResult = { toolId, sessionId: CliSessionId, cwd, pid? }
 ```
+
+`pid` 缺席表示 spawn 失败，调用方据此报 `ok: false`。`CliSessionId` 是品牌类型，只能由 `parseCliSessionId` 或 `newCliSessionId` 产出。
 
 pi：`deliverPrompt = clipboard`，`resume` → `pi --session`。
 
-**session id 来源（as-built）**：`launch` 不传 `--session`，让 pi 自己创建 id，随后从 pi 的 session 目录（`~/.pi/agent/sessions/--<encoded-cwd>--/`）读取**最新**文件解析 id。该目录编码为 best-effort 推断，且依赖启动后 settle（当前 `400ms`）——**属已知脆弱点，待换成确定性方案**。
+**session id 来源（as-built）**：`launch` 预生成 UUIDv7（`newCliSessionId`）并传 `--session-id <id>`，由 pi 在启动时按该 id 创建 session（已验证 pi 1.2.0）。binding 不依赖事后读盘，也不需要 settle 等待。`resume` 传 `--session <id>`。
 
 ---
 
@@ -248,7 +250,7 @@ sequenceDiagram
 | 阶段 | 方式 |
 |------|------|
 | Dev | vite-plugin-electron / `pnpm --filter @tick/desktop dev` |
-| Prod | electron-builder → `.app`；`install.sh` 下载安装 |
+| Prod | 未落地。无 electron-builder 依赖与配置，`pnpm build` 只产出未打包的 main / preload / renderer |
 
 ---
 
@@ -258,5 +260,5 @@ sequenceDiagram
 |-------|------|
 | P0 | ai/pi only（本地 Todo + 拉起 + 面板对话） |
 | P1 | 飞书日历（OAuth / 拉日程 / 点选建 todo / 写回） |
-| P2 | Registry UI + 第 2 个 ai/<tool>；SessionIndex 跨工具浏览 |
+| P2 | Registry UI + 第 2 个 ai/<tool>；跨工具会话浏览（在 SessionStore 上扩展） |
 | P3 | Windows 安装与更多 Adapter |

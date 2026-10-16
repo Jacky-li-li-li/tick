@@ -5,11 +5,12 @@ import type {
   AiToolAdapter,
   AiToolCapabilities,
   ClipboardPort,
+  CliSessionId,
   LaunchContext,
   LaunchResult,
   SessionListItem,
 } from "@tick/ai-core";
-import { assertCliSessionId, formatTodoPrompt } from "@tick/ai-core";
+import { formatTodoPrompt } from "@tick/ai-core";
 import { buildPiArgv } from "./argv.js";
 import { PI_CAPABILITIES, PI_TOOL_ID } from "./capabilities.js";
 import { detectPi, resolvePiBinary } from "./detect.js";
@@ -20,14 +21,15 @@ export interface PiAdapterOptions {
   resolveBinary?: () => Promise<string>;
   clipboard: ClipboardPort;
   /**
-   * Spawn detached interactive TUI. Host supplies Electron-friendly spawn.
+   * Spawn pi in a real terminal. Must resolve with the pi process pid, or
+   * reject when the process could not be started.
    */
   spawnPi: (args: {
     bin: string;
     argv: string[];
     cwd: string;
     env?: Record<string, string>;
-  }) => Promise<void | { pid?: number }>;
+  }) => Promise<{ pid: number }>;
   listSessionsForCwd?: (cwd: string) => Promise<SessionListItem[]>;
   /** Optional absolute path hint for `pi` binary */
   binaryHint?: string;
@@ -72,35 +74,31 @@ export class PiAdapter implements AiToolAdapter {
     await this.options.clipboard.writeText(text);
 
     // Pre-allocate the session id: `pi --session-id <id>` creates the session
-    // under this exact id if missing (verified with pi 1.2.0). This keeps the
-    // todo→session binding deterministic — no fragile post-launch capture.
+    // under this exact id if missing (verified with pi 1.2.0), so the
+    // todo→session binding is deterministic and needs no post-launch capture.
     const sessionId = newCliSessionId();
-    assertCliSessionId(sessionId);
 
     const argv = buildPiArgv({ sessionId, name: ctx.sessionName });
-    const spawned = await this.options.spawnPi({
+    const { pid } = await this.options.spawnPi({
       bin,
       argv,
       cwd: ctx.cwd,
       env: ctx.env,
     });
-    const pid = spawned && typeof spawned === "object" ? spawned.pid : undefined;
 
     return { toolId: this.id, sessionId, cwd: ctx.cwd, pid };
   }
 
-  async resume(sessionId: string, ctx: LaunchContext): Promise<LaunchResult> {
-    assertCliSessionId(sessionId);
+  async resume(sessionId: CliSessionId, ctx: LaunchContext): Promise<LaunchResult> {
     await assertCwd(ctx.cwd);
     const bin = await this.bin();
     const argv = buildPiArgv({ session: sessionId, name: ctx.sessionName });
-    const spawned = await this.options.spawnPi({
+    const { pid } = await this.options.spawnPi({
       bin,
       argv,
       cwd: ctx.cwd,
       env: ctx.env,
     });
-    const pid = spawned && typeof spawned === "object" ? spawned.pid : undefined;
     return { toolId: this.id, sessionId, cwd: ctx.cwd, pid };
   }
 
@@ -110,5 +108,4 @@ export class PiAdapter implements AiToolAdapter {
     }
     return listPiSessionsForCwd(cwd);
   }
-
 }

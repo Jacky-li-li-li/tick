@@ -11,6 +11,15 @@ import type {
 
 type PersistShape = { version: 1; todos: Todo[] };
 
+/** Legacy todos stored `ai` as a single object — normalize to the array form. */
+function migrateTodo(todo: Todo): Todo {
+  const ai = (todo as { ai?: unknown }).ai;
+  if (ai && !Array.isArray(ai)) {
+    return { ...todo, ai: [ai as TodoAiMeta] };
+  }
+  return todo;
+}
+
 export class TodoStore {
   private todos: Todo[] = [];
   private readonly filePath: string;
@@ -26,7 +35,7 @@ export class TodoStore {
       const raw = fs.readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as PersistShape;
       if (parsed?.version === 1 && Array.isArray(parsed.todos)) {
-        this.todos = parsed.todos;
+        this.todos = parsed.todos.map(migrateTodo);
       }
     } catch {
       this.todos = [];
@@ -124,9 +133,14 @@ export class TodoStore {
     if (idx < 0) {
       throw new Error(`todo not found: ${id}`);
     }
+    const current = this.todos[idx];
+    const list = [...(current.ai ?? [])];
+    const existing = list.findIndex((x) => x.sessionId === ai.sessionId);
+    if (existing >= 0) list[existing] = ai;
+    else list.push(ai);
     const next: Todo = {
-      ...this.todos[idx],
-      ai,
+      ...current,
+      ai: list,
       updatedAt: new Date().toISOString(),
     };
     this.todos[idx] = next;

@@ -6,8 +6,9 @@
  * pi 1.2.0: pi creates the session under this exact id.
  */
 import { randomBytes } from "node:crypto";
+import type { CliSessionId } from "@tick/ai-core";
 
-export function newCliSessionId(now: number = Date.now()): string {
+export function newCliSessionId(now: number = Date.now()): CliSessionId {
   const b = randomBytes(16);
   const ts = BigInt(now);
   b[0] = Number((ts >> 40n) & 0xffn);
@@ -19,11 +20,12 @@ export function newCliSessionId(now: number = Date.now()): string {
   b[6] = (b[6]! & 0x0f) | 0x70; // version 7
   b[8] = (b[8]! & 0x3f) | 0x80; // RFC 4122 variant (10xx)
   const h = b.toString("hex");
-  return [
+  const id = [
     h.slice(0, 8),
     h.slice(8, 12),
     h.slice(12, 16),
     h.slice(16, 20),
     h.slice(20),
   ].join("-");
+  return id as CliSessionId;
 }

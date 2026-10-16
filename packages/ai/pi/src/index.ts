@@ -8,7 +8,6 @@ export {
   encodePiSessionCwd,
   defaultPiSessionRoot,
   listPiSessionsForCwd,
-  captureNewestPiSessionId,
 } from "./session-store.js";
 
 import type { AiToolRegistry } from "@tick/ai-core";

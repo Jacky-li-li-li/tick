@@ -13,7 +13,8 @@ export interface Todo {
   status: TodoStatus;
   createdAt: string;
   updatedAt: string;
-  ai?: TodoAiMeta;
+  /** Bound AI sessions (multiple tools / sessions per todo). */
+  ai?: TodoAiMeta[];
 }
 
 export type CreateTodoInput = {
@@ -85,11 +86,6 @@ export type ChatHistoryItem = {
   entryId?: string;
 };
 
-export type ChatSendInput = {
-  sessionId: string;
-  text: string;
-};
-
 export type ChatSendResult = {
   ok: boolean;
   sessionId: string;
@@ -99,6 +95,34 @@ export type ChatSendResult = {
   history?: ChatHistoryItem[];
 };
 
-export type ChatHistoryInput = {
+export type ModelSelection = {
+  provider: string;
+  modelId: string;
+};
+
+export type ModelProviderInfo = {
+  providerId: string;
+  /** A credential exists for this provider (shared pi auth.json). */
+  configured: boolean;
+  /** Catalog model ids (capped); empty for purely dynamic providers. */
+  models: string[];
+};
+
+export type ModelStatus = {
+  /** Currently effective selection; null while falling back to faux. */
+  selected: ModelSelection | null;
+  isFaux: boolean;
+  providers: ModelProviderInfo[];
+};
+
+export type ModelTestResult = {
+  ok: boolean;
+  message: string;
+  latencyMs?: number;
+};
+
+export type PanelChatSession = {
   sessionId: string;
+  title: string;
+  updatedAt?: string;
 };

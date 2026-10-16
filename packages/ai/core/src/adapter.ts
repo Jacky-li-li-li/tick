@@ -1,4 +1,6 @@
-/** Stable tool id in SessionIndex / Todo.ai.toolId */
+import type { CliSessionId } from "./session-policy.js";
+
+/** Stable tool id in Todo.ai.toolId */
 export type AiToolId = "pi" | (string & {});
 
 export type DeliverPromptMode = "clipboard" | "flag" | "stdin" | "none";
@@ -18,7 +20,7 @@ export interface LaunchContext {
   /** Absolute path; required when capabilities.needsCwd */
   cwd: string;
   /** When set, prefer resume over new session */
-  sessionId?: string;
+  sessionId?: CliSessionId;
   sessionName?: string;
   env?: Record<string, string>;
 }
@@ -26,9 +28,9 @@ export interface LaunchContext {
 export interface LaunchResult {
   toolId: AiToolId;
   /** Native CLI session id — NEVER a panel pi-durable conversation id */
-  sessionId: string;
+  sessionId: CliSessionId;
   cwd: string;
-  /** OS pid of spawned CLI process, when host spawn returns it (E2 liveness) */
+  /** OS pid of the spawned CLI process; absent means the spawn failed */
   pid?: number;
 }
 
@@ -46,6 +48,6 @@ export interface AiToolAdapter {
 
   detect(): Promise<boolean>;
   launch(ctx: LaunchContext): Promise<LaunchResult>;
-  resume(sessionId: string, ctx: LaunchContext): Promise<LaunchResult>;
+  resume(sessionId: CliSessionId, ctx: LaunchContext): Promise<LaunchResult>;
   listSessions?(cwd: string): Promise<SessionListItem[]>;
 }

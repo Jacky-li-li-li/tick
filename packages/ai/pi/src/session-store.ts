@@ -60,12 +60,3 @@ export async function listPiSessionsForCwd(
   }
   return items.sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
 }
-
-/** Newest session id for cwd, if any. */
-export async function captureNewestPiSessionId(
-  cwd: string,
-  sessionRoot = defaultPiSessionRoot(),
-): Promise<string | undefined> {
-  const items = await listPiSessionsForCwd(cwd, sessionRoot);
-  return items[0]?.sessionId;
-}

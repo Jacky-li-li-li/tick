@@ -6,17 +6,14 @@ import path from "node:path";
 import { clipboard } from "electron";
 import {
   createAiToolRegistry,
-  createSessionIndex,
-  rejectCrossNamespaceSessionId,
   type AiToolRegistry,
+  type CliSessionId,
   type LaunchContext,
-  type SessionIndex,
 } from "@tick/ai-core";
 import { PiAdapter, registerPiAdapter } from "@tick/ai-pi";
 
 export type AiHost = {
   registry: AiToolRegistry;
-  sessionIndex: SessionIndex;
   pi: PiAdapter;
   /** sessionId → last known pid */
   pids: Map<string, number>;
@@ -37,28 +34,31 @@ export function isPidAlive(pid: number | undefined | null): boolean {
   }
 }
 
+/** A spawn outcome carries a real pid or the spawn failed. */
+export type Spawned = { pid: number };
+
 function spawnPiDetached(args: {
   bin: string;
   argv: string[];
   cwd: string;
   env?: Record<string, string>;
-}): Promise<{ pid?: number }> {
+}): Promise<Spawned> {
   return new Promise((resolve, reject) => {
-    try {
-      const child = spawn(args.bin, args.argv, {
-        cwd: args.cwd,
-        env: { ...process.env, ...args.env },
-        detached: true,
-        stdio: "ignore",
-        windowsHide: false,
-      });
-      child.on("error", reject);
-      const pid = child.pid;
-      child.unref();
-      resolve({ pid });
-    } catch (err) {
-      reject(err);
+    const child = spawn(args.bin, args.argv, {
+      cwd: args.cwd,
+      env: { ...process.env, ...args.env },
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false,
+    });
+    const pid = child.pid;
+    if (pid == null) {
+      reject(new Error(`failed to spawn ${args.bin}`));
+      return;
     }
+    child.once("error", reject);
+    child.unref();
+    resolve({ pid });
   });
 }
 
@@ -96,13 +96,15 @@ async function pollPidFile(
  * macOS: make pi visible in a real Terminal window via
  * `open -a Terminal <launch.command>` (no Apple Events permission needed).
  * The script records its own pid (kept by `exec pi`) into a pidfile so the
- * host still gets a real pid for `session:isAlive`.
+ * host still gets a real pid for `session:isAlive`. A missing pidfile means
+ * the script never reached pi, so the launch fails instead of reporting a
+ * bogus success.
  */
 async function spawnPiInTerminal(args: {
   bin: string;
   argv: string[];
   cwd: string;
-}): Promise<{ pid?: number }> {
+}): Promise<Spawned> {
   const id = randomUUID();
   const pidPath = path.join(os.tmpdir(), `tick-pi-${id}.pid`);
   const scriptPath = path.join(os.tmpdir(), `tick-pi-${id}.command`);
@@ -130,36 +132,36 @@ async function spawnPiInTerminal(args: {
   });
 
   const pid = await pollPidFile(pidPath, 3000);
-  try {
-    await unlink(pidPath);
-  } catch {
+  await unlink(pidPath).catch(() => {
     // best-effort cleanup
+  });
+  if (pid == null) {
+    throw new Error("pi did not start in Terminal within 3s");
   }
   return { pid };
 }
 
-/** Launch pi visibly (Terminal on macOS); fall back to detached spawn elsewhere. */
+/**
+ * Launch pi visibly on macOS. Terminal is the only path that gives pi a TTY,
+ * so a failure there is reported rather than papered over with a detached
+ * spawn that would exit silently.
+ */
 async function spawnPiVisible(args: {
   bin: string;
   argv: string[];
   cwd: string;
   env?: Record<string, string>;
-}): Promise<{ pid?: number }> {
+}): Promise<Spawned> {
   if (process.platform === "darwin") {
-    try {
-      // env is intentionally not forwarded — Terminal runs the user's login
-      // shell environment; PiAdapter currently passes no env anyway.
-      return await spawnPiInTerminal(args);
-    } catch (err) {
-      console.warn("Terminal launch failed, falling back to detached spawn:", err);
-    }
+    // env is intentionally not forwarded — Terminal runs the user's login
+    // shell environment; PiAdapter currently passes no env anyway.
+    return spawnPiInTerminal(args);
   }
   return spawnPiDetached(args);
 }
 
 export function createAiHost(): AiHost {
   const registry = createAiToolRegistry();
-  const sessionIndex = createSessionIndex();
   const pids = new Map<string, number>();
   let lastClipboardOk = false;
   let lastClipboardText = "";
@@ -182,7 +184,6 @@ export function createAiHost(): AiHost {
   });
   return {
     registry,
-    sessionIndex,
     pi,
     pids,
     consumeClipboardFlag: () => {
@@ -269,26 +270,20 @@ export async function launchViaHost(
   host.consumeClipboardFlag();
   const result = await adapter.launch(ctx);
   const clipboardOk = host.consumeClipboardFlag();
-  rejectCrossNamespaceSessionId("cli", result.sessionId);
   rememberPid(host, result.sessionId, result.pid);
-
-  await host.sessionIndex.upsert({
-    toolId: result.toolId,
-    sessionId: result.sessionId,
-    cwd: result.cwd,
-    todoId: input.todoId,
-    lastOpenedAt: Date.now(),
-    kind: "cli",
-  });
 
   return { ...result, clipboard: clipboardOk, title, body };
 }
 
 export async function resumeViaHost(
   host: AiHost,
-  input: { toolId: string; sessionId: string; cwd: string; todoId?: string },
+  input: {
+    toolId: string;
+    sessionId: CliSessionId;
+    cwd: string;
+    todoId?: string;
+  },
 ) {
-  rejectCrossNamespaceSessionId("cli", input.sessionId);
   const adapter = host.registry.get(input.toolId);
   if (!adapter) throw new Error(`unknown tool: ${input.toolId}`);
   if (!(await adapter.detect())) {
@@ -305,15 +300,6 @@ export async function resumeViaHost(
   };
   const result = await adapter.resume(input.sessionId, ctx);
   rememberPid(host, result.sessionId, result.pid);
-
-  await host.sessionIndex.upsert({
-    toolId: result.toolId,
-    sessionId: result.sessionId,
-    cwd: result.cwd,
-    todoId: input.todoId,
-    lastOpenedAt: Date.now(),
-    kind: "cli",
-  });
 
   return result;
 }

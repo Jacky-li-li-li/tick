@@ -1,19 +1,8 @@
-if (typeof Promise.withResolvers !== "function") {
-  (Promise as any).withResolvers = function <T>() {
-    let resolve!: (v: T | PromiseLike<T>) => void;
-    let reject!: (e?: unknown) => void;
-    const promise = new Promise<T>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    return { promise, resolve, reject };
-  };
-}
-
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ChatAgentHost } from "../apps/desktop/src/main/services/chat-agent-host.ts";
+import { parsePanelSessionKey } from "../packages/ai/core/src/session-policy.ts";
 
 const todos: Array<{ id: string; title: string; status: string; content?: string }> = [];
 let n = 0;
@@ -32,7 +21,7 @@ async function main() {
       todos.filter((t) => (input?.status ? t.status === input.status : true)),
   });
 
-  const sessionId = "chat-smoke-a";
+  const sessionId = parsePanelSessionKey("panel:chat-smoke-a");
   console.log("provider env DEEPSEEK set=", Boolean(process.env.DEEPSEEK_API_KEY));
 
   const r1 = await host.send(sessionId, "用一句话打个招呼，说你是 Tick panel chat");
@@ -45,9 +34,12 @@ async function main() {
   const hist = await host.history(sessionId);
   console.log("history count", hist.length, "roles", hist.map((h) => h.who).join(","));
 
-  const r3 = await host.send("chat-smoke-b", "只在 B 说：session-B-only");
+  const r3 = await host.send(
+    parsePanelSessionKey("panel:chat-smoke-b"),
+    "只在 B 说：session-B-only",
+  );
   const histA = await host.history(sessionId);
-  const histB = await host.history("chat-smoke-b");
+  const histB = await host.history(parsePanelSessionKey("panel:chat-smoke-b"));
   const leak = histB.some((h) => h.text.includes("DeepSeek冒烟")) || histA.some((h) => h.text.includes("session-B-only"));
   console.log("isolation", { a: histA.length, b: histB.length, leak, bMsg: r3.message.slice(0, 120) });
 

@@ -2,43 +2,23 @@
  * Panel ChatAgentHost — pi-durable + pi-ai, isolated from CLI pi sessions.
  * Storage: JSONL under Tick userData (Node 20 has no node:sqlite).
  */
-
-/** Electron 33 ships Node 20 — pi-durable needs Promise.withResolvers (Node 22+). */
-{
-  const P = Promise as unknown as {
-    withResolvers?: <T>() => {
-      promise: Promise<T>;
-      resolve: (v: T | PromiseLike<T>) => void;
-      reject: (e?: unknown) => void;
-    };
-  };
-  if (typeof P.withResolvers !== "function") {
-    P.withResolvers = function <T>() {
-      let resolve!: (v: T | PromiseLike<T>) => void;
-      let reject!: (e?: unknown) => void;
-      const promise = new Promise<T>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      return { promise, resolve, reject };
-    };
-  }
-}
+import "./node-compat.js";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import type { CredentialStore, MutableModels } from "@earendil-works/pi-ai";
+import {
+  builtinModels,
+  getBuiltinProviders,
+} from "@earendil-works/pi-ai/providers/all";
 import {
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import {
   createRegistry,
   defineExtension,
@@ -51,10 +31,13 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeJsonlStorage } from "@earendil-works/pi-durable/storage/jsonl/node";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
-import {
-  assertPanelConversationId,
-  rejectCrossNamespaceSessionId,
-} from "@tick/ai-core";
+import type { PanelSessionKey } from "@tick/ai-core";
+import type {
+  ModelStatus,
+  ModelTestResult,
+  PanelChatSession,
+} from "@tick/shared";
+import type { ModelConfigStore } from "./model-config-store";
 
 export type ChatHistoryItem = {
   who: "you" | "agent" | "system";
@@ -81,9 +64,19 @@ export type ChatAgentHostOptions = {
   listTodos: (input?: {
     status?: "open" | "done";
   }) => Promise<Array<{ id: string; title: string; status: string }>>;
+  /** Shared credential store (pi's auth.json) — one credential per provider. */
+  credentials: CredentialStore;
+  /** Tick-side persistence of the selected panel-chat model. */
+  modelConfig: ModelConfigStore;
 };
 
-type PanelMap = Record<string, string>; // panelSessionId → durable ConversationId
+type PanelMapEntry = {
+  conversationId: string;
+  title?: string;
+  updatedAt?: string;
+};
+/** panelSessionId → durable conversation + display metadata. */
+type PanelMap = Record<string, PanelMapEntry>;
 
 function messageText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -99,6 +92,7 @@ function messageText(content: unknown): string {
 
 export class ChatAgentHost {
   private harness: HarnessType | undefined;
+  private models: MutableModels | undefined;
   private faux:
     | ReturnType<typeof fauxProvider>
     | undefined;
@@ -181,24 +175,9 @@ export class ChatAgentHost {
       }),
     );
 
-    const models = createModels();
-    if (process.env.DEEPSEEK_API_KEY) {
-      models.setProvider(deepseekProvider());
-      this.modelRef = { provider: "deepseek", modelId: "deepseek-flash" };
-    } else if (process.env.OPENAI_API_KEY) {
-      models.setProvider(openaiProvider());
-      this.modelRef = { provider: "openai", modelId: "gpt-4o-mini" };
-    } else if (process.env.ANTHROPIC_API_KEY) {
-      models.setProvider(anthropicProvider());
-      this.modelRef = {
-        provider: "anthropic",
-        modelId: "claude-haiku-4-5-20251001",
-      };
-    } else {
-      this.faux = fauxProvider();
-      models.setProvider(this.faux.provider);
-      this.modelRef = { provider: "faux", modelId: "faux-1" };
-    }
+    const models = builtinModels({ credentials: this.options.credentials });
+    this.models = models;
+    await this.refreshModelRef();
 
     const context = BACKGROUND_CONTEXT;
     const storage = await openNodeJsonlStorage(
@@ -225,18 +204,138 @@ export class ChatAgentHost {
     this.started = false;
   }
 
-  /** Ensure a durable conversation for this panel session id (never a CLI id). */
-  async ensureConversation(panelSessionId: string): Promise<Conversation> {
-    await this.start();
-    rejectCrossNamespaceSessionId("panel", panelSessionId);
-    assertPanelConversationId(panelSessionId);
-    if (panelSessionId.startsWith("cli:")) {
-      throw new Error("CLI session id cannot be used for panel chat");
+  /** Resolve the effective model: saved selection → first available → faux. */
+  private async refreshModelRef(): Promise<void> {
+    const models = this.models;
+    if (!models) return;
+    const saved = this.options.modelConfig.get();
+    if (saved) {
+      const model = models.getModel(saved.provider, saved.modelId);
+      if (model && (await models.getAuth(saved.provider))) {
+        this.modelRef = { ...saved };
+        return;
+      }
     }
+    const available = await models.getAvailable();
+    const first = available[0];
+    if (first) {
+      this.modelRef = { provider: first.provider, modelId: first.id };
+      return;
+    }
+    if (!this.faux) {
+      this.faux = fauxProvider();
+      models.setProvider(this.faux.provider);
+    }
+    this.modelRef = { provider: "faux", modelId: "faux-1" };
+  }
+
+  /** Model config view for the panel (providers + models + current choice). */
+  async getModelStatus(): Promise<ModelStatus> {
+    await this.start();
+    const models = this.models!;
+    const credentials = await this.options.credentials.list();
+    const configured = new Set(credentials.map((c) => c.providerId));
+    const providers = getBuiltinProviders().map((providerId) => ({
+      providerId,
+      configured: configured.has(providerId),
+      models: models
+        .getModels(providerId)
+        .map((m) => m.id)
+        .slice(0, 50),
+    }));
+    // Configured providers first (stable otherwise).
+    providers.sort((a, b) => Number(b.configured) - Number(a.configured));
+    return {
+      selected:
+        this.modelRef.provider === "faux"
+          ? null
+          : {
+              provider: this.modelRef.provider,
+              modelId: this.modelRef.modelId,
+            },
+      isFaux: this.modelRef.provider === "faux",
+      providers,
+    };
+  }
+
+  /** Persist the panel-chat model choice and apply it immediately. */
+  async setSelectedModel(provider: string, modelId: string): Promise<void> {
+    await this.start();
+    const models = this.models!;
+    if (!models.getModel(provider, modelId)) {
+      throw new Error(`model not found: ${provider}/${modelId}`);
+    }
+    this.modelRef = { provider, modelId };
+    this.options.modelConfig.set({ provider, modelId });
+  }
+
+  /** Store an API key into the shared pi auth.json (via CredentialStore). */
+  async saveApiKey(providerId: string, apiKey: string): Promise<void> {
+    await this.start();
+    const key = apiKey.trim();
+    if (!key) throw new Error("API key 不能为空");
+    await this.options.credentials.modify(providerId, async () => ({
+      type: "api_key" as const,
+      key,
+    }));
+    // A stored credential now owns this provider — if we were on faux, adopt
+    // the first newly available model so chat upgrades without extra steps.
+    if (this.modelRef.provider === "faux") {
+      await this.refreshModelRef();
+    }
+  }
+
+  /** One-shot connectivity probe (optionally with an unsaved key). */
+  async testProvider(input: {
+    providerId: string;
+    apiKey?: string;
+    modelId?: string;
+  }): Promise<ModelTestResult> {
+    await this.start();
+    const models = this.models!;
+    const model =
+      (input.modelId
+        ? models.getModel(input.providerId, input.modelId)
+        : undefined) ?? models.getModels(input.providerId)[0];
+    if (!model) {
+      return {
+        ok: false,
+        message: `未找到 ${input.providerId} 的可用模型（该提供商可能是动态目录）`,
+      };
+    }
+    const startedAt = Date.now();
+    const apiKey = input.apiKey?.trim();
+    try {
+      const response = await models.completeSimple(
+        model,
+        {
+          messages: [{ role: "user", content: "ping", timestamp: Date.now() }],
+        },
+        apiKey ? { apiKey, maxTokens: 8 } : { maxTokens: 8 },
+      );
+      const latencyMs = Date.now() - startedAt;
+      const text = messageText(
+        (response as { content?: unknown }).content,
+      ).slice(0, 60);
+      return {
+        ok: true,
+        message: `连接成功（${model.id}${text ? ` · ${text}` : ""}）`,
+        latencyMs,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message: message.slice(0, 300) };
+    }
+  }
+
+  /** Ensure a durable conversation for this panel session key (never a CLI id). */
+  async ensureConversation(panelSessionId: PanelSessionKey): Promise<Conversation> {
+    await this.start();
 
     const harness = this.harness!;
     const ctx = BACKGROUND_CONTEXT;
-    const mapped = this.panelMap[panelSessionId];
+    const entry = this.panelMap[panelSessionId];
+    const mapped = entry?.conversationId;
     if (mapped !== undefined && mapped !== "") {
       const existingId = Number(mapped) as ConversationId;
       const found = await harness.conversation(existingId, ctx);
@@ -275,18 +374,21 @@ export class ChatAgentHost {
       },
       ctx,
     );
-    this.panelMap[panelSessionId] = String(created.id);
+    this.panelMap[panelSessionId] = {
+      conversationId: String(created.id),
+      updatedAt: new Date().toISOString(),
+    };
     await this.savePanelMap();
     return created;
   }
 
-  async history(panelSessionId: string): Promise<ChatHistoryItem[]> {
+  async history(panelSessionId: PanelSessionKey): Promise<ChatHistoryItem[]> {
     const conversation = await this.ensureConversation(panelSessionId);
     return this.readHistory(conversation, BACKGROUND_CONTEXT);
   }
 
   async send(
-    panelSessionId: string,
+    panelSessionId: PanelSessionKey,
     text: string,
   ): Promise<ChatSendResult> {
     const trimmed = text.trim();
@@ -303,6 +405,7 @@ export class ChatAgentHost {
       ctx,
     );
     const settled = await submission.wait(ctx);
+    await this.touchPanelSession(panelSessionId, trimmed);
     const history = await this.readHistory(conversation, ctx);
     const lastAgent =
       [...history].reverse().find((h) => h.who === "agent")?.text ?? "";
@@ -354,6 +457,35 @@ export class ChatAgentHost {
     ]);
   }
 
+  /** Panel chat sessions (newest first) for the chat view list. */
+  async listPanelSessions(): Promise<PanelChatSession[]> {
+    await this.start();
+    return Object.entries(this.panelMap)
+      .map(([sessionId, entry]) => ({
+        sessionId,
+        title: entry.title ?? "新会话",
+        updatedAt: entry.updatedAt,
+      }))
+      .sort((a, b) =>
+        (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+      );
+  }
+
+  /** Update display metadata after a successful send (auto-title from 1st message). */
+  private async touchPanelSession(
+    panelSessionId: string,
+    firstText: string,
+  ): Promise<void> {
+    const entry = this.panelMap[panelSessionId];
+    if (!entry) return;
+    if (!entry.title) {
+      const t = firstText.trim().replace(/\s+/g, " ").slice(0, 16);
+      if (t) entry.title = t;
+    }
+    entry.updatedAt = new Date().toISOString();
+    await this.savePanelMap();
+  }
+
   private async readHistory(
     conversation: Conversation,
     ctx: Context,
@@ -390,7 +522,17 @@ export class ChatAgentHost {
   private async loadPanelMap(): Promise<void> {
     try {
       const raw = await readFile(this.mapPath(), "utf8");
-      this.panelMap = JSON.parse(raw) as PanelMap;
+      const parsed = JSON.parse(raw) as Record<
+        string,
+        string | PanelMapEntry
+      >;
+      const map: PanelMap = {};
+      for (const [sessionId, entry] of Object.entries(parsed)) {
+        // Legacy shape stored a bare conversationId string.
+        map[sessionId] =
+          typeof entry === "string" ? { conversationId: entry } : entry;
+      }
+      this.panelMap = map;
     } catch {
       this.panelMap = {};
     }

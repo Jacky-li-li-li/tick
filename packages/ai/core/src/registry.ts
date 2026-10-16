@@ -4,7 +4,6 @@ export interface AiToolRegistry {
   register(adapter: AiToolAdapter): void;
   get(id: AiToolId): AiToolAdapter | undefined;
   list(): AiToolAdapter[];
-  listAvailable(): Promise<AiToolAdapter[]>;
 }
 
 export function createAiToolRegistry(): AiToolRegistry {
@@ -19,13 +18,6 @@ export function createAiToolRegistry(): AiToolRegistry {
     },
     list() {
       return [...byId.values()];
-    },
-    async listAvailable() {
-      const out: AiToolAdapter[] = [];
-      for (const adapter of byId.values()) {
-        if (await adapter.detect()) out.push(adapter);
-      }
-      return out;
     },
   };
 }

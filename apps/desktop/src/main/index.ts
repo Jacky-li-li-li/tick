@@ -19,9 +19,13 @@ import type {
   SetTodoStatusInput,
   UpdateTodoInput,
 } from "@tick/shared";
+import { parseCliSessionId, parsePanelSessionKey } from "@tick/ai-core";
 import { TodoStore } from "./todo-store";
 import { SessionStore } from "./session-store";
+import { resolveResumeTarget } from "./services/resume-target";
 import { ChatAgentHost } from "./services/chat-agent-host";
+import { PiAuthFileCredentialStore } from "./services/pi-auth-store";
+import { ModelConfigStore } from "./services/model-config-store";
 import {
   createAiHost,
   isPidAlive,
@@ -66,6 +70,37 @@ function toggleMainWindow() {
   showMainWindow();
 }
 
+function refreshTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "显示 Tick",
+        click: () => showMainWindow(),
+      },
+      {
+        label: "隐藏面板",
+        click: () => hideMainWindow(),
+      },
+      { type: "separator" },
+      {
+        label: "置顶",
+        type: "checkbox",
+        checked: mainWindow?.isAlwaysOnTop() ?? true,
+        click: (item) => {
+          mainWindow?.setAlwaysOnTop(item.checked);
+          refreshTrayMenu();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => app.quit(),
+      },
+    ]),
+  );
+}
+
 function createTray() {
   if (tray) return;
   const iconPath = path.join(__dirname, "../resources/tray-icon.png");
@@ -81,19 +116,7 @@ function createTray() {
   }
   tray = new Tray(icon);
   tray.setToolTip("Tick");
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: "显示面板",
-        click: () => showMainWindow(),
-      },
-      { type: "separator" },
-      {
-        label: "退出",
-        click: () => app.quit(),
-      },
-    ]),
-  );
+  refreshTrayMenu();
   tray.on("click", () => showMainWindow());
   tray.on("double-click", () => showMainWindow());
 }
@@ -129,8 +152,25 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
+    console.log("[tick] window ready-to-show → show");
     mainWindow?.show();
   });
+
+  // Diagnostics: surface renderer load/runtime failures in the dev console.
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    console.error("[tick] renderer did-fail-load:", code, desc, url);
+  });
+  mainWindow.webContents.on("render-process-gone", (_e, details) => {
+    console.error("[tick] renderer process gone:", JSON.stringify(details));
+  });
+  mainWindow.webContents.on(
+    "console-message",
+    (_e, level, message, line, sourceId) => {
+      if (level >= 2) {
+        console.error(`[tick] renderer console (${level}) ${sourceId}:${line}:`, message);
+      }
+    },
+  );
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
@@ -149,6 +189,7 @@ function registerIpc() {
   ipcMain.handle("window:getAlwaysOnTop", () => mainWindow?.isAlwaysOnTop() ?? true);
   ipcMain.handle("window:setAlwaysOnTop", (_e, flag: boolean) => {
     mainWindow?.setAlwaysOnTop(!!flag);
+    refreshTrayMenu();
     return mainWindow?.isAlwaysOnTop() ?? false;
   });
   ipcMain.handle("window:show", () => {
@@ -191,12 +232,16 @@ function registerIpc() {
 
   // —— session (CLI / tool sessions; not chat) ——
   ipcMain.handle("session:list", () => sessions.list());
-  ipcMain.handle("session:get", (_e, id: string) => sessions.get(id) ?? null);
+  ipcMain.handle("session:get", (_e, rawId: string) => {
+    const id = parseCliSessionId(rawId);
+    return sessions.get(id) ?? null;
+  });
   ipcMain.handle(
     "session:bind",
     (_e, input: { sessionId: string; todoId: string }) => {
-      const session = sessions.get(input.sessionId);
-      if (!session) throw new Error(`session not found: ${input.sessionId}`);
+      const sessionId = parseCliSessionId(input.sessionId);
+      const session = sessions.get(sessionId);
+      if (!session) throw new Error(`session not found: ${sessionId}`);
       const next = { ...session, todoId: input.todoId };
       sessions.set(next);
       if (session.toolId && session.cwd) {
@@ -209,7 +254,8 @@ function registerIpc() {
       return next;
     },
   );
-  ipcMain.handle("session:isAlive", (_e, sessionId: string) => {
+  ipcMain.handle("session:isAlive", (_e, rawId: string) => {
+    const sessionId = parseCliSessionId(rawId);
     const existing = sessions.get(sessionId);
     return probeSessionAlive(aiHost, sessionId, existing?.pid);
   });
@@ -228,6 +274,10 @@ function registerIpc() {
       // empty UI prompt should not override todo title/content
       prompt: input.prompt?.trim() ? input.prompt : undefined,
     });
+    // launchViaHost rejects when the spawn fails, so a missing pid here would
+    // be an adapter contract violation. Do not report it as a success.
+    const spawned = result.pid != null;
+    if (!spawned) throw new Error("pi did not report a pid for the new session");
     const session: Session = {
       id: result.sessionId,
       todoId: input.todoId,
@@ -245,31 +295,27 @@ function registerIpc() {
       });
     }
     return {
-      ok: true,
+      ok: spawned,
       sessionId: result.sessionId,
-      spawned: true,
+      spawned,
       clipboard: result.clipboard === true,
       pid: result.pid,
       alive: isPidAlive(result.pid),
-      message: "launched via PiAdapter; session id captured from pi store",
+      message: "launched via PiAdapter (pi --session-id)",
     };
   });
   ipcMain.handle("ai:resume", async (_e, input: AiResumeInput) => {
-    const existing = sessions.get(input.sessionId);
-    const todoId = existing?.todoId;
+    const target = resolveResumeTarget((id) => sessions.get(id), input);
     const result = await resumeViaHost(aiHost, {
-      toolId: input.toolId,
-      sessionId: input.sessionId,
-      cwd: input.cwd,
-      todoId,
+      toolId: target.toolId,
+      sessionId: target.sessionId,
+      cwd: target.cwd,
+      todoId: target.todoId,
     });
     const session: Session = {
-      id: result.sessionId,
-      todoId,
+      ...target.existing,
       cwd: result.cwd,
-      toolId: result.toolId,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
-      pid: result.pid ?? existing?.pid,
+      pid: result.pid ?? target.existing.pid,
     };
     sessions.set(session);
     return {
@@ -278,47 +324,27 @@ function registerIpc() {
       resumed: true,
       pid: session.pid,
       alive: isPidAlive(session.pid),
-      message: "resumed via PiAdapter (existing id + cwd)",
+      message: "resumed via PiAdapter (pi --session)",
     };
   });
 
   // —— chat (ChatAgentHost / pi-durable; isolated from CLI sessions) ——
+  ipcMain.handle("chat:sessions", () => chatHost.listPanelSessions());
   ipcMain.handle(
     "chat:history",
     async (_e, input: string | { sessionId: string }) => {
-      const sessionId =
-        typeof input === "string" ? input : input?.sessionId;
-      if (!sessionId) throw new Error("chat sessionId is required");
-      if (sessions.get(sessionId)) {
-        throw new Error("CLI session id cannot be used for chat:history");
-      }
-      const history = await chatHost.history(sessionId);
-      return {
-        ok: true,
-        sessionId,
-        history,
-        // compat with earlier PanelChatStore shape
-        messages: history.map((h, i) => ({
-          id: h.entryId ?? `m-${i}`,
-          role:
-            h.who === "you" ? "user" : h.who === "agent" ? "assistant" : "system",
-          text: h.text,
-          createdAt: new Date().toISOString(),
-        })),
-      };
+      const key = parsePanelSessionKey(
+        typeof input === "string" ? input : input?.sessionId,
+      );
+      const history = await chatHost.history(key);
+      return { ok: true, sessionId: key, history };
     },
   );
   ipcMain.handle(
     "chat:send",
     async (_e, input: { sessionId: string; text: string }) => {
-      if (sessions.get(input.sessionId)) {
-        throw new Error("CLI session id cannot be used for chat:send");
-      }
-      const result = await chatHost.send(input.sessionId, input.text);
-      const lastYou = [...result.history].reverse().find((h) => h.who === "you");
-      const lastAgent = [...result.history]
-        .reverse()
-        .find((h) => h.who === "agent");
+      const key = parsePanelSessionKey(input.sessionId);
+      const result = await chatHost.send(key, input.text);
       return {
         ok: result.ok,
         sessionId: result.sessionId,
@@ -326,28 +352,29 @@ function registerIpc() {
         status: result.status,
         message: result.message,
         history: result.history,
-        user: lastYou
-          ? {
-              id: lastYou.entryId ?? "user",
-              role: "user" as const,
-              text: lastYou.text,
-              createdAt: new Date().toISOString(),
-            }
-          : undefined,
-        assistant: lastAgent
-          ? {
-              id: lastAgent.entryId ?? "assistant",
-              role: "assistant" as const,
-              text: lastAgent.text,
-              createdAt: new Date().toISOString(),
-            }
-          : {
-              id: "assistant",
-              role: "assistant" as const,
-              text: result.message,
-              createdAt: new Date().toISOString(),
-            },
       };
+    },
+  );
+
+  // —— model (pi-ai providers; credentials shared via pi's auth.json) ——
+  ipcMain.handle("model:status", () => chatHost.getModelStatus());
+  ipcMain.handle(
+    "model:saveKey",
+    async (_e, input: { providerId: string; apiKey: string }) => {
+      await chatHost.saveApiKey(input.providerId, input.apiKey);
+      return chatHost.getModelStatus();
+    },
+  );
+  ipcMain.handle(
+    "model:test",
+    (_e, input: { providerId: string; apiKey?: string; modelId?: string }) =>
+      chatHost.testProvider(input),
+  );
+  ipcMain.handle(
+    "model:setSelected",
+    async (_e, input: { provider: string; modelId: string }) => {
+      await chatHost.setSelectedModel(input.provider, input.modelId);
+      return chatHost.getModelStatus();
     },
   );
 
@@ -378,6 +405,8 @@ app.whenReady().then(() => {
           title: todo.title,
           status: todo.status,
         })),
+    credentials: new PiAuthFileCredentialStore(),
+    modelConfig: new ModelConfigStore(path.join(dataDir, "model-config.json")),
   });
   void chatHost.start().catch((err) => {
     console.error("ChatAgentHost start failed", err);

@@ -11,16 +11,12 @@ export type {
 export type { AiToolRegistry } from "./registry.js";
 export { createAiToolRegistry } from "./registry.js";
 
-export type { CliSessionRecord, SessionIndex } from "./session-index.js";
-export { createSessionIndex } from "./session-index.js";
+export type { ClipboardPort } from "./prompt.js";
+export { formatTodoPrompt } from "./prompt.js";
 
-export type { PromptDelivery, ClipboardPort } from "./prompt.js";
-export { formatTodoPrompt, createClipboardPromptDelivery } from "./prompt.js";
-
-export type { SessionNamespace, PanelConversationId } from "./session-policy.js";
+export type { CliSessionId, PanelSessionKey } from "./session-policy.js";
 export {
-  qualifySessionKey,
-  assertCliSessionId,
-  assertPanelConversationId,
-  rejectCrossNamespaceSessionId,
+  PANEL_SESSION_PREFIX,
+  parseCliSessionId,
+  parsePanelSessionKey,
 } from "./session-policy.js";

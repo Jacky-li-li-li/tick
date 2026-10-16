@@ -23,6 +23,13 @@ export default defineConfig({
       main: {
         entry: path.join(pkgRoot, "src/main/index.ts"),
         vite: {
+          define: {
+            // ws 的可选 native 依赖（bufferutil / utf-8-validate）不参与打包：
+            // 打包成 ESM 静态 import 后解析失败会导致整个 main 加载崩溃
+            //（try/catch 兑不住顶层 import）。置 1 让 ws 走纯 JS fallback。
+            "process.env.WS_NO_BUFFER_UTIL": '"1"',
+            "process.env.WS_NO_UTF_8_VALIDATE": '"1"',
+          },
           build: {
             outDir: path.join(pkgRoot, "dist-electron"),
             emptyOutDir: false,

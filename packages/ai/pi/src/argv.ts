@@ -1,12 +1,12 @@
 /**
  * Build argv for the `pi` CLI. No shell string concat.
- * Launch (new): omit --session / --session-id; pi creates the id; Adapter captures it.
- * Resume: pass --session <id|path> with existing id + spawn cwd.
+ * Launch (new): pass `--session-id <uuid>` so pi creates the session under an
+ * id we already hold. Resume: pass `--session <id>` for an existing session.
  */
 export function buildPiArgv(input: {
   /** Resume: official `--session <path|id>` */
   session?: string;
-  /** New session only if smoke requires pre-allocated id — default omit */
+  /** New session: pre-allocated id, pi creates the session under it */
   sessionId?: string;
   name?: string;
 }): string[] {

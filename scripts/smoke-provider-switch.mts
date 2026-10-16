@@ -2,22 +2,11 @@
  * Regression: mapped panel conversation must survive provider switch (faux → deepseek).
  * Requires DEEPSEEK_API_KEY.
  */
-if (typeof (Promise as any).withResolvers !== "function") {
-  (Promise as any).withResolvers = function <T>() {
-    let resolve!: (v: T | PromiseLike<T>) => void;
-    let reject!: (e?: unknown) => void;
-    const promise = new Promise<T>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    return { promise, resolve, reject };
-  };
-}
-
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ChatAgentHost } from "../apps/desktop/src/main/services/chat-agent-host.ts";
+import { parsePanelSessionKey } from "../packages/ai/core/src/session-policy.ts";
 
 const todos: Array<{ id: string; title: string; status: string }> = [];
 let n = 0;
@@ -33,7 +22,7 @@ const hooks = {
 async function main() {
   if (!process.env.DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY required");
   const dir = await mkdtemp(path.join(tmpdir(), "tick-switch-"));
-  const sessionId = "chat-switch-a";
+  const sessionId = parsePanelSessionKey("panel:chat-switch-a");
 
   // Phase 1: force faux by clearing DEEPSEEK temporarily
   const key = process.env.DEEPSEEK_API_KEY;

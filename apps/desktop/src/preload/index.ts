@@ -7,6 +7,9 @@ import type {
   ChatHistoryItem,
   ChatSendResult,
   CreateTodoInput,
+  ModelStatus,
+  ModelTestResult,
+  PanelChatSession,
   Session,
   SetTodoStatusInput,
   Todo,
@@ -57,23 +60,15 @@ const api = {
       ipcRenderer.invoke("ai:resume", input),
   },
   chat: {
+    sessions: (): Promise<PanelChatSession[]> =>
+      ipcRenderer.invoke("chat:sessions"),
     history: (
       input: string | { sessionId: string },
     ): Promise<{
       ok: boolean;
       sessionId: string;
       history: ChatHistoryItem[];
-      messages?: Array<{
-        id: string;
-        role: string;
-        text: string;
-        createdAt: string;
-      }>;
-    }> =>
-      ipcRenderer.invoke(
-        "chat:history",
-        typeof input === "string" ? input : input,
-      ),
+    }> => ipcRenderer.invoke("chat:history", input),
     send: (input: {
       sessionId: string;
       text: string;
@@ -82,6 +77,23 @@ const api = {
   clipboard: {
     lastDelivered: (): Promise<{ text: string; at: string | null }> =>
       ipcRenderer.invoke("clipboard:lastDelivered"),
+  },
+  model: {
+    status: (): Promise<ModelStatus> => ipcRenderer.invoke("model:status"),
+    saveKey: (input: {
+      providerId: string;
+      apiKey: string;
+    }): Promise<ModelStatus> => ipcRenderer.invoke("model:saveKey", input),
+    test: (input: {
+      providerId: string;
+      apiKey?: string;
+      modelId?: string;
+    }): Promise<ModelTestResult> => ipcRenderer.invoke("model:test", input),
+    setSelected: (input: {
+      provider: string;
+      modelId: string;
+    }): Promise<ModelStatus> =>
+      ipcRenderer.invoke("model:setSelected", input),
   },
 };
 
