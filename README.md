@@ -2,7 +2,7 @@
 
 Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板视觉是磨砂半透明玻璃（设计源在 `docs/ui/`）。
 
-当前版本：`v0.1.0`（macOS）。
+当前版本：`v0.1.1`（macOS）。
 
 ## 下载安装（macOS）
 
@@ -10,12 +10,12 @@ Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板�
 
 | 机器 | 文件 |
 |------|------|
-| Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.0-arm64.dmg` |
-| Intel | `Tick-0.1.0-x64.dmg` |
+| Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.1-arm64.dmg` |
+| Intel | `Tick-0.1.1-x64.dmg` |
 
-打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.0-arm64.dmg` 对一下再装。
+打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.1-arm64.dmg` 对一下再装。
 
-首次打开会被 Gatekeeper 拦下来（没有 Apple Developer ID 的版本未公证），任选一种放行：
+配了 Developer ID 的 Release 已签名 + 公证，双击即可打开。若拿到的是未签名的构建（本地打包、或仓库没配 Secrets 时 CI 出的包），首次打开会被 Gatekeeper 拦下来，任选一种放行：
 
 - 右键点 App → 「打开」→ 对话框里再点「打开」（只需一次）
 - 「系统设置 → 隐私与安全性」→ 找到 Tick 的提示 → 「仍要打开」
@@ -165,7 +165,7 @@ pnpm --filter @tick/desktop dist:dir   # 只出 .app，不压 dmg（本地调试
 打 tag 会触发 `.github/workflows/release.yml`：跑 typecheck + test，构建两个架构的 dmg/zip，挂到 GitHub Release。
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.1.1 && git push origin v0.1.1
 ```
 
 签名 / 公证沿用 `Jacky-li-li-li/Look` 项目那套（Secrets 名字保持一致，值取自同一份 Developer ID 证书）。Secrets 是**仓库级**的，需要在 tick 仓库再建一次（值抄 Look 用的那份）：
