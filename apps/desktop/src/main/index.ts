@@ -27,6 +27,7 @@ import { resolveResumeTarget } from "./services/resume-target";
 import { ChatAgentHost } from "./services/chat-agent-host";
 import { PiAuthFileCredentialStore } from "./services/pi-auth-store";
 import { ModelConfigStore } from "./services/model-config-store";
+import { UpdateService } from "./services/update-service";
 import {
   createAiHost,
   isPidAlive,
@@ -40,6 +41,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let store: TodoStore;
 let sessions: SessionStore;
 let chatHost: ChatAgentHost;
+let updater: UpdateService;
 const aiHost = createAiHost();
 
 let mainWindow: BrowserWindow | null = null;
@@ -396,6 +398,14 @@ function registerIpc() {
     },
   );
 
+  // —— update (electron-updater；只有打包后的 app 里才有 app-update.yml) ——
+  ipcMain.handle("update:getState", () => updater.getState());
+  ipcMain.handle("update:check", () => updater.check());
+  ipcMain.handle("update:download", () => updater.download());
+  ipcMain.handle("update:install", () => {
+    updater.install();
+  });
+
   // —— clipboard observability (QA E3) ——
   ipcMain.handle("clipboard:lastDelivered", () => aiHost.peekLastClipboard());
 }
@@ -429,6 +439,14 @@ app.whenReady().then(() => {
   void chatHost.start().catch((err) => {
     console.error("ChatAgentHost start failed", err);
   });
+  updater = new UpdateService(app.getVersion(), app.isPackaged);
+  // 面板可能被隐藏或还没建；状态是幂等的，打开时 update:getState 会补上
+  updater.onState((state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:state", state);
+    }
+  });
+  updater.start();
   registerIpc();
   createWindow();
   createTray();

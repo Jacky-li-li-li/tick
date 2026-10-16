@@ -18,6 +18,7 @@
     "@tick/ai-core": "workspace:*",
     "@tick/ai-pi": "workspace:*",
     "@tick/shared": "workspace:*",
+    "electron-updater": "^6.6.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -47,6 +48,13 @@
       "package.json"
     ],
     "afterPack": "build/after-pack.mjs",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Jacky-li-li-li",
+        "repo": "tick"
+      }
+    ],
     "extraResources": [
       {
         "from": "resources",

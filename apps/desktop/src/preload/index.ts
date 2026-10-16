@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type {
   AiLaunchInput,
   AiLaunchResult,
@@ -13,6 +13,7 @@ import type {
   Session,
   SetTodoStatusInput,
   Todo,
+  UpdateState,
   UpdateTodoInput,
 } from "@tick/shared";
 
@@ -96,6 +97,20 @@ const api = {
       modelId: string;
     }): Promise<ModelStatus> =>
       ipcRenderer.invoke("model:setSelected", input),
+  },
+  update: {
+    getState: (): Promise<UpdateState> => ipcRenderer.invoke("update:getState"),
+    check: (): Promise<UpdateState> => ipcRenderer.invoke("update:check"),
+    download: (): Promise<UpdateState> => ipcRenderer.invoke("update:download"),
+    install: (): Promise<void> => ipcRenderer.invoke("update:install"),
+    /** 主进程推来的状态；返回值是取消订阅。 */
+    onState: (listener: (state: UpdateState) => void): (() => void) => {
+      const wrapped = (_event: IpcRendererEvent, state: UpdateState) => listener(state);
+      ipcRenderer.on("update:state", wrapped);
+      return () => {
+        ipcRenderer.removeListener("update:state", wrapped);
+      };
+    },
   },
 };
 
