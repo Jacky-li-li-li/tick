@@ -1,13 +1,13 @@
 cask "tick" do
-  version "0.1.6"
+  version "0.1.7"
 
   on_arm do
-    sha256 "afc6e95b57d1cf238f48a76becdedb550cb907adefa7e8b55d48ae70d4e889ec"
+    sha256 "a78b626c12b28b614a466692ec7198a877e4441f82c2c67ab8b20cf2140a536c"
     url "https://github.com/Jacky-li-li-li/tick/releases/download/v#{version}/Tick-#{version}-arm64.dmg"
   end
 
   on_intel do
-    sha256 "32adac459ccba892e33743ed5d7eacbee32f1dc90572892af1acb7f7fad218b7"
+    sha256 "28534454c7b8ba5b33204fe141f3d0f8f15fb75ae6ddba4641bf40b896e138d1"
     url "https://github.com/Jacky-li-li-li/tick/releases/download/v#{version}/Tick-#{version}-x64.dmg"
   end
 
