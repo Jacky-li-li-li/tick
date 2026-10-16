@@ -134,3 +134,18 @@ export type PanelChatSession = {
   title: string;
   updatedAt?: string;
 };
+
+/**
+ * 自动更新状态机。用带 tag 的联合而不是一堆布尔：检查中 / 有新版 / 下载中 /
+ * 已下载本来就互斥，散落的布尔允许「下载中」和「已下载」同时为真。
+ */
+export type UpdateState = { currentVersion: string } & (
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "up-to-date" }
+  | { status: "available"; version: string }
+  | { status: "downloading"; version: string; percent: number }
+  | { status: "ready"; version: string }
+  | { status: "error"; message: string }
+  | { status: "unsupported"; message: string }
+);
