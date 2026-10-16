@@ -31,7 +31,11 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeJsonlStorage } from "@earendil-works/pi-durable/storage/jsonl/node";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
-import type { PanelSessionKey } from "@tick/ai-core";
+import {
+  PANEL_SESSION_PREFIX,
+  parsePanelSessionKey,
+  type PanelSessionKey,
+} from "@tick/ai-core";
 import type {
   ModelStatus,
   ModelTestResult,
@@ -542,7 +546,21 @@ export class ChatAgentHost {
         string | PanelMapEntry
       >;
       const map: PanelMap = {};
-      for (const [sessionId, entry] of Object.entries(parsed)) {
+      for (const [key, entry] of Object.entries(parsed)) {
+        // 早期版本的 key 不带 panel: 前缀。面板会把它当会话 id 发给
+        // chat:history，被 parsePanelSessionKey 拒掉，对话页就永远停在报错上
+        // （每次都优先选中最近那个），所以加载时补前缀。补完仍不合法的
+        // （空 key 这类）丢掉，不让它进内存。
+        let sessionId: PanelSessionKey;
+        try {
+          sessionId = parsePanelSessionKey(
+            key.startsWith(PANEL_SESSION_PREFIX)
+              ? key
+              : `${PANEL_SESSION_PREFIX}${key}`,
+          );
+        } catch {
+          continue;
+        }
         // Legacy shape stored a bare conversationId string.
         map[sessionId] =
           typeof entry === "string" ? { conversationId: entry } : entry;
