@@ -2,7 +2,7 @@
 
 Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板视觉是磨砂半透明玻璃（设计源在 `docs/ui/`）。
 
-当前版本：`v0.1.5`（macOS）。
+当前版本：`v0.1.6`（macOS）。
 
 ## 安装（macOS）
 
@@ -20,10 +20,10 @@ curl -fsSL https://raw.githubusercontent.com/Jacky-li-li-li/tick/main/scripts/in
 
 | 机器 | 文件 |
 |------|------|
-| Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.5-arm64.dmg` |
-| Intel | `Tick-0.1.5-x64.dmg` |
+| Apple Silicon（M1/M2/M3/M4…） | `Tick-0.1.6-arm64.dmg` |
+| Intel | `Tick-0.1.6-x64.dmg` |
 
-打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.5-arm64.dmg` 对一下再装。
+打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.6-arm64.dmg` 对一下再装。
 
 ### Homebrew
 
@@ -37,7 +37,7 @@ tap 必须写成两段式：仓库名是 `tick` 而不是 `homebrew-tick`，而 
 cask 文件在 [`Casks/tick.rb`](Casks/tick.rb)，指向的是 Release 里的 dmg。它不会自己跟着新版本走，每次发完版跑一次下面这条重新对齐版本号和 sha256（它会去读 Release 上的 `SHA256SUMS.txt`）：
 
 ```bash
-pnpm cask:bump 0.1.5
+pnpm cask:bump 0.1.6
 ```
 
 配了 Developer ID 的 Release 已签名 + 公证，双击即可打开。若拿到的是未签名的构建（本地打包、或仓库没配 Secrets 时 CI 出的包），首次打开会被 Gatekeeper 拦下来，任选一种放行：
@@ -53,6 +53,12 @@ pnpm cask:bump 0.1.5
 
 - AI 功能依赖本机已安装的 `pi` CLI；检测不到时「绑 AI」里不会列出该工具
 - 面板对话需要先在面板里点「··· → 模型配置」填 API Key（Key 只存本机 pi 的 `~/.pi/agent/auth.json`，与 pi CLI 共享）
+
+### 应用内更新
+
+从 `v0.1.6` 起，面板顶栏 `···` 菜单里能检查更新：有新版会显示版本号，点进去一路「下载并安装 → 重启并安装」，不用再去 Release 页面。
+
+`v0.1.5` 及更早的包里面没有更新源信息（`Contents/Resources/app-update.yml`），所以拿不到这条通路，需要手工装一次 `0.1.6` 之后才会进入自动更新。
 
 ## Monorepo 结构
 
@@ -190,7 +196,7 @@ pnpm --filter @tick/desktop dist:dir   # 只出 .app，不压 dmg（本地调试
 打 tag 会触发 `.github/workflows/release.yml`：跑 typecheck + test，构建两个架构的 dmg/zip，挂到 GitHub Release。
 
 ```bash
-git tag v0.1.5 && git push origin v0.1.5
+git tag v0.1.6 && git push origin v0.1.6
 ```
 
 签名 / 公证沿用 `Jacky-li-li-li/Look` 项目那套（Secrets 名字保持一致，值取自同一份 Developer ID 证书）。Secrets 是**仓库级**的，需要在 tick 仓库再建一次（值抄 Look 用的那份）：
