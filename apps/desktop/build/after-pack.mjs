@@ -21,9 +21,6 @@ export default async function afterPack(context) {
   const appPath = `${context.appOutDir}/${context.packager.appInfo.productFilename}.app`;
   console.log(`[after-pack] 无证书：ad-hoc 签名 ${appPath}`);
 
-  // 必须先清扩展属性：bundle 上带 resource fork / Finder 信息时 codesign 会直接报
-  // "resource fork, Finder information, or similar detritus not allowed"
-  execFileSync("xattr", ["-cr", appPath], { stdio: "inherit" });
   execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
     stdio: "inherit",
   });
