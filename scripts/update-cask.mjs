@@ -40,6 +40,8 @@ function sha256(arch) {
 const asset = (arch) =>
   `https://github.com/Jacky-li-li-li/tick/releases/download/v#{version}/Tick-#{version}-${arch}.dmg`;
 
+// url 上不写 verified：Homebrew 已废弃这个参数，默认行为就是拿下载地址的域名
+// 跟 homepage 的域名比对，走 github.com 时本来就过。
 writeFileSync(
   new URL("../Casks/tick.rb", import.meta.url),
   `cask "tick" do
@@ -47,14 +49,12 @@ writeFileSync(
 
   on_arm do
     sha256 "${sha256("arm64")}"
-    url "${asset("arm64")}",
-        verified: "github.com/Jacky-li-li-li/tick/"
+    url "${asset("arm64")}"
   end
 
   on_intel do
     sha256 "${sha256("x64")}"
-    url "${asset("x64")}",
-        verified: "github.com/Jacky-li-li-li/tick/"
+    url "${asset("x64")}"
   end
 
   name "Tick"
