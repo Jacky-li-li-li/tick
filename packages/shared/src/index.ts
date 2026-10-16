@@ -106,6 +106,12 @@ export type ModelProviderInfo = {
   providerId: string;
   /** A credential exists for this provider (shared pi auth.json). */
   configured: boolean;
+  /**
+   * pi-ai 认为该 provider 当前可用（凭据或环境变量提供的 ambient auth）。
+   * 为何要独立于 configured：只配了环境变量（如 MOONSHOT_API_KEY）时
+   * configured 为 false，但模型其实能用，界面需要把这种情况标出来。
+   */
+  available: boolean;
   /** Catalog model ids (capped); empty for purely dynamic providers. */
   models: string[];
 };

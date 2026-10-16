@@ -55,6 +55,8 @@ export function ModelConfig() {
 
   const provider = status?.providers.find((p) => p.providerId === providerId);
   const configuredNow = provider?.configured ?? false;
+  // 环境变量提供的 ambient auth：没存 Key，但 pi-ai 认为可用，保存时不该拦住。
+  const envOnlyNow = (provider?.available ?? false) && !configuredNow;
   const models = provider?.models ?? [];
   const query = modelQuery.trim().toLowerCase();
   const matched = query
@@ -103,7 +105,7 @@ export function ModelConfig() {
 
   async function doSave() {
     if (!providerId || !modelId) return;
-    if (!configuredNow && !apiKey.trim()) {
+    if (!configuredNow && !envOnlyNow && !apiKey.trim()) {
       setNote({ kind: "err", text: "请先填写 API Key（可先测试连接）" });
       return;
     }
@@ -186,7 +188,11 @@ export function ModelConfig() {
               >
                 <span>
                   {p.providerId}
-                  {p.configured ? "（已配置）" : ""}
+                  {p.configured
+                    ? "（已配置）"
+                    : p.available
+                      ? "（环境变量可用）"
+                      : ""}
                 </span>
                 <span>{p.providerId === providerId ? "✓" : ""}</span>
               </button>
@@ -269,7 +275,13 @@ export function ModelConfig() {
               setTestState("idle");
               if (note?.kind === "err") setNote(null);
             }}
-            placeholder={configuredNow ? "已保存 · 留空则不修改" : "sk-..."}
+            placeholder={
+              configuredNow
+                ? "已保存 · 留空则不修改"
+                : envOnlyNow
+                  ? "环境变量已提供 · 可不填"
+                  : "sk-..."
+            }
           />
           {configuredNow ? (
             <button
@@ -291,11 +303,19 @@ export function ModelConfig() {
             >
               {armClear ? "确认清除" : "清除"}
             </button>
+          ) : envOnlyNow ? (
+            <span className="side">环境变量可用</span>
           ) : (
             <span className="side">去填写</span>
           )}
         </div>
       </div>
+
+      {envOnlyNow && (
+        <div className="stub">
+          {providerId} 已由环境变量提供凭据，无需在此填 Key 也能用。
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="mc-test">连接</label>

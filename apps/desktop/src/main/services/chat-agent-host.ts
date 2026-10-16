@@ -235,9 +235,15 @@ export class ChatAgentHost {
     const models = this.models!;
     const credentials = await this.options.credentials.list();
     const configured = new Set(credentials.map((c) => c.providerId));
+    // 与 refreshModelRef 的回退判断同源：getAvailable() 会把环境变量提供的
+    // ambient auth 也算进来，这类 provider configured 为 false 但其实可用。
+    const available = new Set(
+      (await models.getAvailable()).map((m) => m.provider),
+    );
     const providers = getBuiltinProviders().map((providerId) => ({
       providerId,
       configured: configured.has(providerId),
+      available: available.has(providerId),
       // 全量返回目录：openrouter / vercel-ai-gateway 这类有 200~400 个模型，
       // 截断会让用户选不到后面的模型（UI 侧用搜索 + 滚动承载）。
       models: models.getModels(providerId).map((m) => m.id),
