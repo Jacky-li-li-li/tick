@@ -1,17 +1,17 @@
 # 发版全链路手册（macOS 桌面应用 / Electron 类）
 
-这份文档是从 tick 这个项目实际发版（0.1.1 连败 4 次 → 0.1.5 首次全绿 → 0.1.6 加应用内更新 → 0.1.7 真正跑通自升级）里攒出来的，写法上只保留**跟具体项目无关的那部分**：机制在哪、为什么必须这么做、怎么自己验证一遍。
+面向 macOS 桌面应用（Electron / electron-builder / electron-updater 这一类）的完整发布链路。写法上只保留**跟具体项目无关的那部分**：机制在哪、为什么必须这么做、怎么自己验证一遍。
 
-换项目时，把 `<APP>`、`<OWNER>/<REPO>`、`<VERSION>` 换成你的即可。凡是结论来自某个库的源码，都写了源文件和函数名——库升级后你可以照着再核一遍，别信我的记忆。
+换项目时把 `<APP>`、`<OWNER>/<REPO>`、`<VERSION>` 换成自己的即可。凡是结论来自某个库的源码的，都写了源文件和函数名——库升级后照着再核一遍，别信记忆。
 
 ---
 
 ## 0. 先记住四条
 
-1. **收口在 CI，别靠人记。** 版本号、tag、产物、cask 是四个要同时对齐的地方，只要有一处靠人记，迟早漏一次（tick 漏过一次 cask，发完 cask 还指着旧版本）。
+1. **收口在 CI，别靠人记。** 版本号、tag、产物、cask 是四个要同时对齐的地方，只要有一处靠人记，迟早漏一次。
 2. **签名 / 公证 / 更新只认打包产物，不认源码。** 任何"我在开发态试过"都不算数。能在真产物上验就别在开发态验。
 3. **"能构建"不是"验过"。** 断言"某个文件真的进包了"，比断言"构建没报错"有用一个数量级。
-4. **确定性失败不要重试。** 重试只是把每次诊断的延迟乘 N，还附送 N 份一样的报错。tick 0.1.1 就干过这事（一个确定性失败重试 3 次，406 秒）。
+4. **确定性失败不要重试。** 重试只是把每次诊断的延迟乘 N，还附送 N 份一模一样的报错。
 
 ---
 
@@ -175,16 +175,16 @@ CI 里你没法点弹窗、没法看 job summary 以外的东西。两个出口�
 
 ### 5.3 多架构：合并成一份，且**不要信 `path`**
 
-同一次构建出 arm64 + x64 时，`latest-mac.yml` **只有一份**，两个架构的产物都塞进 `files` 数组里。实际长这样（0.1.7 的真实产物）：
+同一次构建出 arm64 + x64 时，`latest-mac.yml` **只有一份**，两个架构的产物都塞进 `files` 数组里。真实产物长这样：
 
 ```yaml
-version: 0.1.7
+version: 1.2.3
 files:
-  - url: <APP>-0.1.7-x64.zip
-  - url: <APP>-0.1.7-arm64.zip
-  - url: <APP>-0.1.7-x64.dmg
-  - url: <APP>-0.1.7-arm64.dmg
-path: <APP>-0.1.7-x64.zip        # ← 只指向其中一条，别拿它当"该下哪个"
+  - url: <APP>-1.2.3-x64.zip
+  - url: <APP>-1.2.3-arm64.zip
+  - url: <APP>-1.2.3-x64.dmg
+  - url: <APP>-1.2.3-arm64.dmg
+path: <APP>-1.2.3-x64.zip        # ← 只指向其中一条，别拿它当"该下哪个"
 sha512: ...
 releaseDate: ...
 ```
@@ -197,7 +197,7 @@ releaseDate: ...
 
 那"该下哪个"由谁决定？消费端的 `MacUpdater`（`electron-updater/out/MacUpdater.js`）：
 
-- 先判断这台机器是不是 arm64；
+- 先判断运行它的机器是不是 arm64；
 - 然后 `files.filter(按文件名里有没有 "arm64")`；
 - 再从中挑 `.zip`。
 
@@ -376,7 +376,7 @@ ditto --noextattr --norsrc <src>.app <dst>.app
 
 **本地签 Developer ID 会卡在时间戳服务上。** 正式分发签名带 `--timestamp`，要连 Apple 的时间戳服务器；网络受限时 `codesign` 会停在 **0% CPU 静默挂着**（不报错，没有超时）。
 
-对照实验（这台机器上做的）：同一个 `.app`，`codesign --force --deep --sign -`（ad-hoc，不带 `--timestamp`）**秒过**；而走 Developer ID 那次 `codesign` 挂了 3 分钟以上、CPU 0%。所以本地出包不要试图走正式签名，用 `CSC_IDENTITY_AUTO_DISCOVERY=false` 跳过，签名交给 CI。同理，CI 也必须能连上 Apple 的时间戳服务，否则构建会**挂死**而不是失败——给构建步骤配 job 级超时。
+实测对照：同一个 `.app`，`codesign --force --deep --sign -`（ad-hoc，不带 `--timestamp`）**秒过**；而走 Developer ID 那次 `codesign` 挂了 3 分钟以上、CPU 0%。所以本地出包不要试图走正式签名，用 `CSC_IDENTITY_AUTO_DISCOVERY=false` 跳过，签名交给 CI。同理，CI 也必须能连上 Apple 的时间戳服务，否则构建会**挂死**而不是失败——给构建步骤配 job 级超时。
 
 **无证书时给 ad-hoc 签名。** 用 `afterPack` 钩子做 `codesign --force --deep --sign -`，否则 Apple Silicon 上的用户下载后会看到"已损坏，无法打开"。有正式证书时跳过，交给构建工具签。
 
@@ -420,19 +420,3 @@ ditto --noextattr --norsrc <src>.app <dst>.app
 1. **验证要落在"匹配的 surface"上。** 修的是打包态的问题，就别在开发态验；修的是 UI 可见的问题，就去看 UI（渲染进程真的调一遍 IPC），别只看主进程日志。
 2. **能自己造条件造条件，但要说清造了什么。** 例如自更新的"下载 → 已完成"两段，可以起个本地 HTTP 服务当 feed、造一个 sha512 对得上的假包，这一段是真实执行的；但"安装替换"那一段永远验不了（Squirrel 会拒掉假包）——**那就明说它没验**，不要含糊过去。
 3. **有些结论只能等下一个版本才能验。** 例如"应用能自己升级"需要一个真实的、更新的 Release 存在。这时候的诚实写法是：把已经验到的部分和没验到的部分分开写，并给出下一次发版时可以顺带验掉的清单。
-
----
-
-## 附：tick 的具体取值（作为对照，不要照抄）
-
-| 项 | 取值 |
-|----|------|
-| 框架 | Electron + electron-builder 26 |
-| 更新器 | electron-updater 6（放在 `dependencies`） |
-| 架构 | arm64 + x64 |
-| 目标 | dmg + zip |
-| tap 仓库 | `Jacky-li-li-li/tick`（非 `homebrew-tick`，故必须两段式 tap） |
-| 一行安装 | `curl -fsSL https://raw.githubusercontent.com/Jacky-li-li-li/tick/main/scripts/install.sh \| sh` |
-| 签名 | Developer ID Application（`mac.identity` 钉死）+ `notarize: true` |
-| CI | `.github/workflows/release.yml`，macos-14 |
-| feed | `latest-mac.yml` + `*.blockmap`，随 Release 上传 |
