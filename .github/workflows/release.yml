@@ -62,25 +62,50 @@ jobs:
 
           rm $RUNNER_TEMP/cert.p12
 
-      # 签名 + 公证都在 electron-builder 里（build.mac.notarize: true）；
-      # 公证偶发超时，按 Look 的做法重试 3 次
+      # 签名 + 公证都在 electron-builder 里（build.mac.notarize: true）。
+      # 不在这里盲目重试：v0.1.1 把一个确定性失败重试了三次（实测 406 秒），
+      # 只是把每次诊断的延迟乘三，还附带三份一样的报错。
       - name: 构建 dmg / zip（arm64 + x64）
         run: |
           if [ -n "$MAC_CERTS" ]; then
-            ok=0
-            for i in 1 2 3; do
-              if pnpm --filter @tick/desktop dist; then ok=1; break; fi
-              echo "第 $i 次失败，10s 后重试…"
-              sleep 10
-            done
-            if [ "$ok" != "1" ]; then
-              echo "electron-builder 连续 3 次失败"
-              exit 1
-            fi
+            pnpm --filter @tick/desktop dist
           else
             echo "::warning::未配置 MAC_CERTS，产出未签名包（用户首次打开需按 README 放行）"
             CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @tick/desktop dist
           fi
+
+      # 闸门。签名和公证之间本来没有任何检查，所以 notarytool 只会回一句
+      # "The binary is not signed with a valid Developer ID certificate"，
+      # 看不出是证书没被认出来、还是签名器漏掉了文件。这里把两边的证据都摊到
+      # job summary 上（CI 日志要鉴权才能下载，summary 在网页上直接能看）。
+      - name: 签名闸门（诊断）
+        if: always()
+        run: |
+          set -o pipefail
+          {
+            echo "### keychain 里 electron-builder 能看到的身份"
+            echo '```'
+            security list-keychains
+            security find-identity -v -p codesigning || true
+            echo '```'
+            echo "### 产物里每个 Mach-O 的签名"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          inspected=0
+          failed=0
+          for app in apps/desktop/release/mac-*/Tick.app; do
+            [ -d "$app" ] || continue
+            inspected=$((inspected + 1))
+            node scripts/verify-signature.mjs "$app" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || failed=1
+          done
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$inspected" = 0 ]; then
+            echo "没有找到 .app：构建没走到打包阶段" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          exit "$failed"
 
       # 产物校验：签名过的要验签、资源要真的进包（magpie 的做法）
       - name: 校验产物
