@@ -9,6 +9,7 @@
     "desktop": "pnpm --filter @tick/desktop dev",
     "dist": "pnpm --filter @tick/desktop dist",
     "verify:sign": "node scripts/verify-signature.mjs",
+    "cask:bump": "node scripts/update-cask.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "tsx packages/ai/core/test/session-policy.test.mts && tsx packages/ai/pi/test/session-id.test.mts && tsx packages/ai/pi/test/pi-adapter.test.mts && tsx apps/desktop/test/resume-target.test.mts && tsx packages/ai/pi/test/argv.test.mjs"
   },

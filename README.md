@@ -15,6 +15,18 @@ Tick 是一个始终置顶的桌面 Todo 面板（Electron monorepo），面板�
 
 打开 dmg，把 `Tick.app` 拖进「应用程序」。Release 里有 `SHA256SUMS.txt`，可用 `shasum -a 256 Tick-0.1.5-arm64.dmg` 对一下再装。
 
+### Homebrew
+
+```bash
+brew install --cask Jacky-li-li-li/tick/tick
+```
+
+cask 文件在 [`Casks/tick.rb`](Casks/tick.rb)，指向的是 Release 里的 dmg。它不会自己跟着新版本走，每次发完版跑一次下面这条重新对齐版本号和 sha256（它会去读 Release 上的 `SHA256SUMS.txt`）：
+
+```bash
+pnpm cask:bump 0.1.5
+```
+
 配了 Developer ID 的 Release 已签名 + 公证，双击即可打开。若拿到的是未签名的构建（本地打包、或仓库没配 Secrets 时 CI 出的包），首次打开会被 Gatekeeper 拦下来，任选一种放行：
 
 - 右键点 App → 「打开」→ 对话框里再点「打开」（只需一次）
